@@ -326,7 +326,7 @@ local function init_engine_context(box_num, params)
         outer_shift = is_outer_border and (ob_thickness + ob_sep) or 0,
         shift_x = (is_outer_border and (ob_thickness + ob_sep) or 0),
         shift_y = (is_outer_border and (ob_thickness + ob_sep) or 0) +
-            (is_border and (b_thickness + c_padding_top) or 0),
+            (is_border and b_thickness or 0) + c_padding_top,
         border_rgb_str = utils.normalize_rgb(border_color) or "0 0 0",
         c_padding_top = c_padding_top,
         c_padding_bottom = c_padding_bottom,

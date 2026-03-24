@@ -448,6 +448,8 @@
 \NewCommandCopy{\文本框}{\TextBox}
 \NewCommandCopy{\文本框设置}{\textboxSetup}
 \NewCommandCopy{\填充文本框}{\FillTextBox}
+\NewDocumentCommand{\悬浮文本框}{ O{} +m }{\TextBox[floating=true, #1]{#2}}
+\NewDocumentCommand{\FloatingTextBox}{ O{} +m }{\TextBox[floating=true, #1]{#2}}
 % English
 \NewCommandCopy{\inverted}{\反白}
 \NewCommandCopy{\bordered}{\墨围}
