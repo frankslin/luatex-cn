@@ -257,6 +257,7 @@ end
 -- @param decorations (table) Decoration data
 -- @return (table|nil) Page number layout (marked as runtime)
 local function calculate_page_number_layout(params, regions, decorations)
+    if params.page_number_show == false then return nil end
     -- Page number is runtime content (changes per page)
     local yuwei_dims = decorations.yuwei_dims
     local upper_yuwei_total = decorations.upper_yuwei and calculate_yuwei_total_height(yuwei_dims) or 0

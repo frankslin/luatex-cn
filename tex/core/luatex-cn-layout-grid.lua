@@ -684,12 +684,14 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         -- Left half: cols 0..interval-1, banxin: col interval, right half: cols interval+1..2*interval.
         if interval > 0 then
             flush_buffer_fn()
-            -- When at the start of a half-page with no content yet,
+            -- When at the start of a half-page with no content in this half yet,
             -- just record the penalty node in place (don't jump).
-            -- This handles \插图页 at page start: no-silk applies to current half.
+            -- This handles \插图页 at page/half-page start: no-silk applies to current half.
+            -- cur_row==0 at a half-page boundary means the current half is empty,
+            -- regardless of whether the other half had content (page_has_content).
             local at_half_start = (ctx.cur_col == 0 or ctx.cur_col == interval + 1)
                                   and ctx.cur_row == 0
-            if at_half_start and not ctx.page_has_content then
+            if at_half_start then
                 if penalty_node then
                     ctx.layout_map[penalty_node] = {
                         page = ctx.cur_page,
@@ -788,9 +790,10 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 ctx.cur_page = ctx.cur_page + 1
                 ctx.page_has_content = false
                 -- On new page, table starts at col 0 with full page width
+                -- (unless column_fill=half-page, which keeps the original width)
                 ctx.cur_col = 0
                 ctx.table_start_col = 0
-                ctx.band_cols_per_band = p_cols
+                ctx.band_cols_per_band = ctx.table_orig_band_cols or p_cols
             elseif ctx.band_mode == "parallel" and ctx.table_start_page ~= nil then
                 -- Parallel mode: each band starts independently from the
                 -- table's start page/col, so a long band that overflowed to
@@ -799,7 +802,7 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 local orig_col = ctx.table_orig_start_col or 0
                 ctx.cur_col = orig_col
                 ctx.table_start_col = orig_col
-                ctx.band_cols_per_band = p_cols - orig_col
+                ctx.band_cols_per_band = ctx.table_orig_band_cols or (p_cols - orig_col)
                 ctx.page_has_content = true
             end
             ctx.line_limit = ctx.band_line_limits[ctx.cur_band]
@@ -983,6 +986,17 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         local cf = tp.column_fill
         if cf == "page" then
             ctx.band_cols_per_band = p_cols - ctx.cur_col
+        elseif cf == "half-page" and interval > 0 then
+            -- Fill current half-page only
+            local half_end
+            if ctx.cur_col <= interval then
+                -- In left half (or at banxin): fill up to banxin boundary
+                half_end = interval
+            else
+                -- In right half: fill up to page end
+                half_end = p_cols
+            end
+            ctx.band_cols_per_band = half_end - ctx.cur_col
         elseif tp.n_columns and tp.n_columns > 0 then
             ctx.band_cols_per_band = tp.n_columns
         else
@@ -998,6 +1012,7 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         ctx.table_start_col = ctx.cur_col
         ctx.table_start_page = ctx.cur_page
         ctx.table_orig_start_col = ctx.cur_col  -- immutable copy for parallel reset
+        ctx.table_orig_band_cols = ctx.band_cols_per_band  -- immutable copy for parallel reset
         -- Track max page each band reaches (for per-page border rendering)
         ctx.table_band_max_page = {}
         ctx.table_render_cell_idx = 0
@@ -1036,7 +1051,7 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         -- Read column_fill early (needed for both border width and page break)
         local tparams_cf = (_G.content and _G.content.table_params)
             and _G.content.table_params.column_fill or nil
-        local is_fill_page = (tparams_cf == "page")
+        local is_fill_page = (tparams_cf == "page" or tparams_cf == "half-page")
 
         -- Calculate actual table width from col_groups (max across all bands)
         local all_col_groups = (_G.content and _G.content.table_col_groups) or {}
@@ -1120,12 +1135,26 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         reset_column_transient_state(ctx)
         ctx.cur_column_indent = 0
 
-        -- column_fill=page: force page break after table
+        -- column_fill=page/half-page: force break after table
         -- Skip if already at the start of a new page (e.g. parallel mode wrapped here)
         if is_fill_page and (ctx.cur_col > 0 or ctx.page_has_content) then
-            ctx.cur_col = 0
-            ctx.cur_page = ctx.cur_page + 1
-            ctx.page_has_content = false
+            if tparams_cf == "half-page" and interval > 0 then
+                -- half-page: advance to next half-page boundary
+                if ctx.cur_col <= interval then
+                    -- In left half: jump to right half start
+                    ctx.cur_col = interval + 1
+                else
+                    -- In right half: jump to next page
+                    ctx.cur_col = 0
+                    ctx.cur_page = ctx.cur_page + 1
+                    ctx.page_has_content = false
+                end
+            else
+                -- page: advance to next page
+                ctx.cur_col = 0
+                ctx.cur_page = ctx.cur_page + 1
+                ctx.page_has_content = false
+            end
         end
 
         -- Restore saved band state

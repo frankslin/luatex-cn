@@ -68,6 +68,7 @@
 \tl_new:N \l__luatexcn_banxin_middle_section_font_color_tl
 
 % Page number variables
+\bool_new:N \l__luatexcn_banxin_page_number_show_bool
 \tl_new:N \l__luatexcn_banxin_page_number_font_size_tl
 \tl_new:N \l__luatexcn_banxin_page_number_grid_height_tl
 \tl_new:N \l__luatexcn_banxin_page_number_align_tl
@@ -136,6 +137,8 @@
 % page-number sub-namespace
 \keys_define:nn { luatexcn / banxin / page-number }
   {
+    show .bool_set:N = \l__luatexcn_banxin_page_number_show_bool,
+    show .initial:n = true,
     font-size .tl_set:N = \l__luatexcn_banxin_page_number_font_size_tl,
     font-size .initial:n = {14pt},
     grid-height .tl_set:N = \l__luatexcn_banxin_page_number_grid_height_tl,
@@ -342,6 +345,8 @@
 % --- page-number sub-namespace ---
 \keys_define:nn { luatexcn / banxin / page-number }
   {
+    显示 .bool_set:N = \l__luatexcn_banxin_page_number_show_bool,
+    顯示 .bool_set:N = \l__luatexcn_banxin_page_number_show_bool,
     字号 .tl_set:N = \l__luatexcn_banxin_page_number_font_size_tl,
     格高 .tl_set:N = \l__luatexcn_banxin_page_number_grid_height_tl,
     对齐 .tl_set:N = \l__luatexcn_banxin_page_number_align_tl,

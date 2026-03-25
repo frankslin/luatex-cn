@@ -44,8 +44,10 @@
   {
     \str_case:nnF {#1}
       {
-        {页}   { \tl_set:Nn \l__luatexcn_table_column_fill_tl { page } }
-        {頁}   { \tl_set:Nn \l__luatexcn_table_column_fill_tl { page } }
+        {页}     { \tl_set:Nn \l__luatexcn_table_column_fill_tl { page } }
+        {頁}     { \tl_set:Nn \l__luatexcn_table_column_fill_tl { page } }
+        {半页}   { \tl_set:Nn \l__luatexcn_table_column_fill_tl { half-page } }
+        {半頁}   { \tl_set:Nn \l__luatexcn_table_column_fill_tl { half-page } }
       }
       { \tl_set:Nn \l__luatexcn_table_column_fill_tl {#1} }
   }

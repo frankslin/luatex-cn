@@ -143,6 +143,7 @@ local function read_banxin_params()
         lower_yuwei = get_bool("l__luatexcn_banxin_lower_yuwei_bool"),
 
         -- Page number
+        page_number_show = get_bool("l__luatexcn_banxin_page_number_show_bool"),
         page_number_align = get_tl("l__luatexcn_banxin_page_number_align_tl") or "right-bottom",
         page_number_font_size = parse_dim(get_tl("l__luatexcn_banxin_page_number_font_size_tl")),
         page_number_grid_height = parse_dim(get_tl("l__luatexcn_banxin_page_number_grid_height_tl")),
@@ -285,6 +286,7 @@ function banxin_main.layout(list, layout_map, engine_ctx, context)
                     middle_section_align = bp.middle_section_align,
                     middle_section_bg_color = bp.middle_section_bg_color,
                     middle_section_font_color = bp.middle_section_font_color,
+                    page_number_show = bp.page_number_show,
                     page_number_align = bp.page_number_align,
                     page_number_font_size = bp.page_number_font_size > 0 and bp.page_number_font_size or nil,
                     lower_section_text = bp.lower_section_text,
