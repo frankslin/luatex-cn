@@ -243,36 +243,78 @@ end
 
 constants.register_decorate = register_decorate
 
+--- Process a captured side content box.
+-- Examines the vbox: if it contains a TextBox result (has ATTR_TEXTBOX_WIDTH),
+-- copies the box for direct positioning during render.
+-- Otherwise extracts unicode codepoints for character-by-character rendering.
+-- @param box_num (number) TeX box register number
+-- @return (table|nil) { chars = {...} } or { box = <node> }
+local function process_side_box(box_num)
+    if not box_num or box_num < 0 then return nil end
+    local box = tex.box[box_num]
+    if not box then return nil end
+
+    local D = node.direct
+    local head = D.todirect(box.head)
+    if not head then return nil end
+
+    -- Check if the vbox contains a TextBox result (vlist with ATTR_TEXTBOX_WIDTH)
+    local n = head
+    while n do
+        local id = D.getid(n)
+        if id == constants.VLIST then
+            local attr = D.get_attribute(n, constants.ATTR_TEXTBOX_WIDTH)
+            if attr and attr > 0 then
+                return { box = node.copy_list(box) }
+            end
+        end
+        n = D.getnext(n)
+    end
+
+    -- Plain text: extract unicode codepoints from glyph nodes
+    local chars = {}
+    local function extract(nd)
+        while nd do
+            local id = D.getid(nd)
+            if id == constants.GLYPH then
+                local char = D.getfield(nd, "char")
+                if char and char > 0 then
+                    table.insert(chars, char)
+                end
+            elseif id == constants.HLIST or id == constants.VLIST then
+                local child = D.getfield(nd, "head")
+                if child then extract(child) end
+            end
+            nd = D.getnext(nd)
+        end
+    end
+    extract(head)
+    if #chars == 0 then return nil end
+    return { chars = chars }
+end
+
 --- Register a side text decoration (small text on left/right of main character)
--- New API: right content first, left content optional
--- @param right_str (string) Text for right side (mandatory, may be empty)
--- @param left_str (string) Text for left side (optional, may be empty)
--- @param scale (string|number) Scale factor for side text (default 0.5, from global setup)
--- @param color_str (string) Color (default "black", from global setup)
+-- Content is passed as box register numbers (captured via \vbox_set:Nn in TeX).
+-- Supports both plain text and \文本框 content.
+-- @param right_box_num (number) Box register number for right content
+-- @param left_box_num (number|nil) Box register number for left content (nil = no left)
+-- @param scale (string|number) Scale factor for plain text (default 0.5)
+-- @param color_str (string) Color for plain text (default "black")
 -- @param font_id (number) Font ID (nil = use current font)
--- @param offset_str (string) Horizontal offset from column edge (e.g., "0.1em")
+-- @param offset_str (string) Horizontal offset from column edge
 -- @return (number) Registry ID
-local function register_side_text(right_str, left_str, scale, color_str, font_id, offset_str)
+local function register_side_text(right_box_num, left_box_num, scale, color_str, font_id, offset_str)
     _G.decorate_registry = _G.decorate_registry or {}
 
-    -- Convert text strings to arrays of unicode codepoints
-    local right_chars = {}
-    if right_str and right_str ~= "" then
-        for _, cp in utf8.codes(right_str) do
-            table.insert(right_chars, cp)
-        end
-    end
-    local left_chars = {}
-    if left_str and left_str ~= "" then
-        for _, cp in utf8.codes(left_str) do
-            table.insert(left_chars, cp)
-        end
-    end
+    local right_data = process_side_box(right_box_num)
+    local left_data = process_side_box(left_box_num)
 
     local reg = {
         type = "side_text",
-        right_chars = right_chars,
-        left_chars = left_chars,
+        right_chars = right_data and right_data.chars,
+        right_box = right_data and right_data.box,
+        left_chars = left_data and left_data.chars,
+        left_box = left_data and left_data.box,
         scale = tonumber(scale) or 0.5,
         color = color_str or "black",
         font_id = font_id,

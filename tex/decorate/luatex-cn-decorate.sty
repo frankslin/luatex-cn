@@ -213,6 +213,7 @@
 \tl_new:N \l__luatexcn_sidetext_scale_tl
 \tl_new:N \l__luatexcn_sidetext_color_tl
 \tl_new:N \l__luatexcn_sidetext_offset_tl
+\box_new:N \l__luatexcn_sidetext_right_box
 
 \keys_define:nn { luatexcn / sidetext }
   {
@@ -234,15 +235,25 @@
     偏移 .tl_set:N = \l__luatexcn_sidetext_offset_tl,
   }
 
+% Content is captured in a vbox, supporting both plain text and \文本框.
+% Lua examines the vbox: if it contains a TextBox result (ATTR_TEXTBOX_WIDTH),
+% the box is stored for direct positioning; otherwise chars are extracted
+% for character-by-character rendering.
 \NewDocumentCommand{\SideText}{ m m g }{%
   \group_begin:
     #1
+    % Capture right content in a vbox (\文本框 uses \l_tmpa_box, so we use \l_tmpb_box)
+    \vbox_set:Nn \l_tmpb_box { #2 }
     \IfValueTF{#3}{
+      % Save right box to dedicated register before overwriting \l_tmpb_box
+      \box_set_eq:NN \l__luatexcn_sidetext_right_box \l_tmpb_box
+      % Capture left content
+      \vbox_set:Nn \l_tmpb_box { #3 }
       \lua_now:e {
         local~constants~=~require('core.luatex-cn-constants')
         constants.register_side_text(
-          "\luaescapestring{#2}",
-          "\luaescapestring{#3}",
+          \int_value:w~\l__luatexcn_sidetext_right_box,
+          \int_value:w~\l_tmpb_box,
           "\luaescapestring{\l__luatexcn_sidetext_scale_tl}",
           "\luaescapestring{\l__luatexcn_sidetext_color_tl}",
           font.current(),
@@ -253,8 +264,8 @@
       \lua_now:e {
         local~constants~=~require('core.luatex-cn-constants')
         constants.register_side_text(
-          "\luaescapestring{#2}",
-          "",
+          \int_value:w~\l_tmpb_box,
+          nil,
           "\luaescapestring{\l__luatexcn_sidetext_scale_tl}",
           "\luaescapestring{\l__luatexcn_sidetext_color_tl}",
           font.current(),

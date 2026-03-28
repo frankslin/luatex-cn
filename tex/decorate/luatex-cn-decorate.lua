@@ -358,11 +358,73 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
         end
     end
 
-    render_side(reg.right_chars, "right")
-    render_side(reg.left_chars, "left")
+    -- Render a pre-rendered TextBox on one side (kern+shift positioning like floating box)
+    local function render_side_box(box_node, side)
+        if not box_node then return end
 
-    dbg.log(string.format("side_text [c:%d, y_sp:%.0f] scale=%.2f left=%d right=%d",
-        pos.col, pos.y_sp or 0, scale, #(reg.left_chars or {}), #(reg.right_chars or {})))
+        local box_copy = D.todirect(node.copy_list(box_node))
+        local box_w = D.getfield(box_copy, "width") or 0
+        local box_h = D.getfield(box_copy, "height") or 0
+
+        -- Horizontal: center the box in the side zone
+        local target_x
+        if side == "right" then
+            target_x = base_x + col_width * 3 / 4 - offset_sp - box_w / 2
+        else
+            target_x = base_x + col_width / 4 + offset_sp - box_w / 2
+        end
+
+        -- Vertical: center box on main character
+        -- rel_y is distance from top of content area (positive = down)
+        local rel_y = target_y_sp + band_y_off + ctx.shift_y
+        local main_center_rel_y = rel_y + cell_h / 2
+        local box_top_rel_y = main_center_rel_y - box_h / 2
+
+        -- Compensate for page margins (same as render_floating_box)
+        local m_top = (_G.page and _G.page.margin_top) or 0
+        local m_left = (_G.page and _G.page.margin_left) or 0
+        local final_x = target_x - m_left
+        local final_y = box_top_rel_y - m_top
+
+        D.setfield(box_copy, "shift", final_y + box_h)
+
+        local k_pre = D.new(constants.KERN)
+        D.setfield(k_pre, "kern", final_x)
+
+        local k_post = D.new(constants.KERN)
+        D.setfield(k_post, "kern", -(final_x + box_w))
+
+        local q_push = utils.create_pdf_literal("q")
+        local q_pop = utils.create_pdf_literal("Q")
+
+        -- Insert at tail of node list (renders on top, like floating box)
+        local tail = D.tail(p_head)
+        D.insert_after(p_head, tail, q_push)
+        D.insert_after(p_head, q_push, k_pre)
+        D.insert_after(p_head, k_pre, box_copy)
+        D.insert_after(p_head, box_copy, k_post)
+        D.insert_after(p_head, k_post, q_pop)
+    end
+
+    -- Dispatch: TextBox (box path) or plain text (char-by-char path)
+    if reg.right_box then
+        render_side_box(reg.right_box, "right")
+    elseif reg.right_chars then
+        render_side(reg.right_chars, "right")
+    end
+
+    if reg.left_box then
+        render_side_box(reg.left_box, "left")
+    elseif reg.left_chars then
+        render_side(reg.left_chars, "left")
+    end
+
+    local rc = reg.right_chars and #reg.right_chars or 0
+    local lc = reg.left_chars and #reg.left_chars or 0
+    local rb = reg.right_box and 1 or 0
+    local lb = reg.left_box and 1 or 0
+    dbg.log(string.format("side_text [c:%d, y_sp:%.0f] scale=%.2f chars(r=%d,l=%d) box(r=%d,l=%d)",
+        pos.col, pos.y_sp or 0, scale, rc, lc, rb, lb))
 
     return p_head
 end
