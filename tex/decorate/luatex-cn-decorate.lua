@@ -250,6 +250,123 @@ function decorate.handle_node(curr, p_head, pos, params, ctx, reg_id)
     return p_head
 end
 
+-- ============================================================================
+-- Side Text Rendering (左右旁注 - small text on sides of main character)
+-- ============================================================================
+
+--- Handle side text decoration rendering
+-- Places small characters vertically stacked on left/right sides of the main character.
+-- @param curr (node) Current marker node
+-- @param p_head (node) Page head
+-- @param pos (table) Position from layout_map
+-- @param params (table) Render parameters
+-- @param ctx (table) Render context
+-- @param reg_id (number) Registry ID
+-- @return p_head (updated)
+function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
+    local reg = _G.decorate_registry and _G.decorate_registry[reg_id]
+    if not reg or reg.type ~= "side_text" then return p_head end
+
+    local scale = reg.scale or 0.5
+    local font_id = reg.font_id or ctx.last_font_id or params.font_id or font.current()
+    local f_data = font.getfont(font_id)
+    local base_size = f_data and f_data.size or 655360
+
+    local draw_rgb = (reg.color and color_map[reg.color]) or reg.color or "0 0 0"
+    local color_part = string.format("%s %s",
+        utils.create_color_literal(draw_rgb, false),
+        utils.create_color_literal(draw_rgb, true))
+
+    -- Main character cell geometry
+    local cell_h = pos.cell_height or ctx.grid_height or base_size
+    local col_width = text_position.get_column_width(pos.col, ctx.col_geom)
+    local _, base_x = text_position.calculate_rtl_position(
+        pos.col, ctx.p_total_cols, ctx.col_geom, ctx.half_thickness, ctx.shift_x)
+
+    -- Main character vertical center (PDF y direction, in sp)
+    -- Marker y_sp points to row below main char; subtract cell_h to get main char top
+    local target_y_sp = math.max(0, pos.y_sp - cell_h)
+    local band_y_off = pos.band_y_offset_sp or 0
+    local main_top_y = -target_y_sp - band_y_off - ctx.shift_y
+    local main_center_y = main_top_y - cell_h / 2
+
+    -- Offset from default position (positive = inward toward column center)
+    local offset_sp = constants.resolve_dimen(reg.offset, base_size) or 0
+
+    -- Render a vertical column of characters on one side
+    local function render_side(chars, side)
+        if not chars or #chars == 0 then return end
+
+        local char_step = math.floor(base_size * scale)
+        local total_h = #chars * char_step
+
+        -- X target: visual center of the side text zone
+        -- Right side = 3/4 column width, Left side = 1/4 column width
+        local target_x
+        if side == "right" then
+            target_x = base_x + col_width * 3 / 4 - offset_sp
+        else
+            target_x = base_x + col_width / 4 + offset_sp
+        end
+
+        for i, char_code in ipairs(chars) do
+            local gw, gh, gd = 0, 0, 0
+            if f_data and f_data.characters and f_data.characters[char_code] then
+                local c = f_data.characters[char_code]
+                gw = c.width or 0
+                gh = c.height or 0
+                gd = c.depth or 0
+            end
+
+            -- Create glyph node
+            local g = D.new(constants.GLYPH)
+            D.setfield(g, "char", char_code)
+            D.setfield(g, "font", font_id)
+            D.setfield(g, "lang", 0)
+            D.setfield(g, "width", gw)
+            D.setfield(g, "height", gh)
+            D.setfield(g, "depth", gd)
+            D.setfield(g, "xoffset", 0)
+            D.setfield(g, "yoffset", 0)
+
+            -- Horizontal: center glyph's visual center at target_x
+            local v_center = text_position.get_visual_center(char_code, font_id) or (gw / 2)
+            local glyph_x = target_x - v_center * scale
+
+            -- Vertical: stack chars centered on main character
+            -- i=1 is topmost, i=#chars is bottommost
+            local char_top_y = main_center_y + total_h / 2 - (i - 1) * char_step
+            local ink_center_y = ((gh - gd) / 2) * scale
+            local glyph_y = char_top_y - char_step / 2 - ink_center_y
+
+            local x_bp = glyph_x * utils.sp_to_bp
+            local y_bp = glyph_y * utils.sp_to_bp
+
+            -- Render with PDF scale matrix
+            local matrix_part = string.format("%.4f 0 0 %.4f %.4f %.4f cm",
+                scale, scale, x_bp, y_bp)
+            local n_start = utils.create_pdf_literal("q " .. color_part .. " " .. matrix_part)
+            local n_end = utils.create_pdf_literal(utils.create_graphics_state_end())
+
+            p_head = D.insert_before(p_head, curr, n_start)
+            D.insert_after(p_head, n_start, g)
+
+            local k = D.new(constants.KERN)
+            D.setfield(k, "kern", -gw)
+            D.insert_after(p_head, g, k)
+            D.insert_after(p_head, k, n_end)
+        end
+    end
+
+    render_side(reg.right_chars, "right")
+    render_side(reg.left_chars, "left")
+
+    dbg.log(string.format("side_text [c:%d, y_sp:%.0f] scale=%.2f left=%d right=%d",
+        pos.col, pos.y_sp or 0, scale, #(reg.left_chars or {}), #(reg.right_chars or {})))
+
+    return p_head
+end
+
 package.loaded['decorate.luatex-cn-decorate'] = decorate
 
 return decorate

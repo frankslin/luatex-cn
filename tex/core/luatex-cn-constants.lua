@@ -243,6 +243,69 @@ end
 
 constants.register_decorate = register_decorate
 
+--- Register a side text decoration (small text on left/right of main character)
+-- New API: right content first, left content optional
+-- @param right_str (string) Text for right side (mandatory, may be empty)
+-- @param left_str (string) Text for left side (optional, may be empty)
+-- @param scale (string|number) Scale factor for side text (default 0.5, from global setup)
+-- @param color_str (string) Color (default "black", from global setup)
+-- @param font_id (number) Font ID (nil = use current font)
+-- @param offset_str (string) Horizontal offset from column edge (e.g., "0.1em")
+-- @return (number) Registry ID
+local function register_side_text(right_str, left_str, scale, color_str, font_id, offset_str)
+    _G.decorate_registry = _G.decorate_registry or {}
+
+    -- Convert text strings to arrays of unicode codepoints
+    local right_chars = {}
+    if right_str and right_str ~= "" then
+        for _, cp in utf8.codes(right_str) do
+            table.insert(right_chars, cp)
+        end
+    end
+    local left_chars = {}
+    if left_str and left_str ~= "" then
+        for _, cp in utf8.codes(left_str) do
+            table.insert(left_chars, cp)
+        end
+    end
+
+    local reg = {
+        type = "side_text",
+        right_chars = right_chars,
+        left_chars = left_chars,
+        scale = tonumber(scale) or 0.5,
+        color = color_str or "black",
+        font_id = font_id,
+        offset = to_dimen(offset_str),
+    }
+    table.insert(_G.decorate_registry, reg)
+    local reg_id = #_G.decorate_registry
+
+    -- Create zero-width marker node (same pattern as register_decorate)
+    local D = node.direct
+    local g = D.new(constants.GLYPH)
+    D.setfield(g, "char", 0x3000) -- ideographic space as placeholder
+    D.setfield(g, "font", font_id or font.current())
+    D.setfield(g, "width", 0)
+    D.setfield(g, "height", 0)
+    D.setfield(g, "depth", 0)
+
+    if constants.ATTR_DECORATE_ID then
+        D.set_attribute(g, constants.ATTR_DECORATE_ID, reg_id)
+    end
+
+    local h = D.new(node.id("hlist"))
+    D.setfield(h, "head", g)
+    D.setfield(h, "width", 0)
+    D.setfield(h, "height", 0)
+    D.setfield(h, "depth", 0)
+
+    tex.box[0] = D.tonode(h)
+    return reg_id
+end
+
+constants.register_side_text = register_side_text
+
 -- ============================================================================
 -- Line Mark Registration (for 专名号/书名号 - PDF-drawn lines)
 -- ============================================================================

@@ -199,6 +199,84 @@
 % Commands \Underline, \WavyUnderline, \下划线, \波浪线 etc. are defined there.
 % ============================================================================
 
+% ============================================================================
+% SideText (旁注) - Small text on left/right sides of a character
+% Used in genealogy typesetting to annotate individual characters.
+% New API: \SideText{主字}{右内容}{左内容?}
+%   #1 = main character (mandatory)
+%   #2 = right side content (mandatory)
+%   #3 = left side content (optional, g-type brace-delimited)
+% Per-side formatting: use \文本框 inside content, not options on \旁注.
+% Global defaults (scale, color, offset) can be set via \sideTextSetup.
+% ============================================================================
+
+\tl_new:N \l__luatexcn_sidetext_scale_tl
+\tl_new:N \l__luatexcn_sidetext_color_tl
+\tl_new:N \l__luatexcn_sidetext_offset_tl
+
+\keys_define:nn { luatexcn / sidetext }
+  {
+    scale .tl_set:N = \l__luatexcn_sidetext_scale_tl,
+    scale .initial:n = 0.5,
+    color .tl_set:N = \l__luatexcn_sidetext_color_tl,
+    color .initial:n = black,
+    offset .tl_set:N = \l__luatexcn_sidetext_offset_tl,
+    offset .initial:n = 0pt,
+  }
+
+% CJK aliases for sidetext global setup keys
+\keys_define:nn { luatexcn / sidetext }
+  {
+    缩放 .tl_set:N = \l__luatexcn_sidetext_scale_tl,
+    縮放 .tl_set:N = \l__luatexcn_sidetext_scale_tl,
+    颜色 .tl_set:N = \l__luatexcn_sidetext_color_tl,
+    顏色 .tl_set:N = \l__luatexcn_sidetext_color_tl,
+    偏移 .tl_set:N = \l__luatexcn_sidetext_offset_tl,
+  }
+
+\NewDocumentCommand{\SideText}{ m m g }{%
+  \group_begin:
+    #1
+    \IfValueTF{#3}{
+      \lua_now:e {
+        local~constants~=~require('core.luatex-cn-constants')
+        constants.register_side_text(
+          "\luaescapestring{#2}",
+          "\luaescapestring{#3}",
+          "\luaescapestring{\l__luatexcn_sidetext_scale_tl}",
+          "\luaescapestring{\l__luatexcn_sidetext_color_tl}",
+          font.current(),
+          "\luaescapestring{\l__luatexcn_sidetext_offset_tl}"
+        )
+      }
+    }{
+      \lua_now:e {
+        local~constants~=~require('core.luatex-cn-constants')
+        constants.register_side_text(
+          "\luaescapestring{#2}",
+          "",
+          "\luaescapestring{\l__luatexcn_sidetext_scale_tl}",
+          "\luaescapestring{\l__luatexcn_sidetext_color_tl}",
+          font.current(),
+          "\luaescapestring{\l__luatexcn_sidetext_offset_tl}"
+        )
+      }
+    }
+    \box0\scan_stop:
+  \group_end:
+}
+
+\NewDocumentCommand{\sideTextSetup}{ m }
+  {
+    \keys_set:nn { luatexcn / sidetext } { #1 }
+  }
+
+% Chinese aliases
+\NewCommandCopy{\旁注}{\SideText}
+\NewCommandCopy{\旁註}{\SideText}
+\NewCommandCopy{\旁注设置}{\sideTextSetup}
+\NewCommandCopy{\旁註設置}{\sideTextSetup}
+
 \ExplSyntaxOff%
 %
 \endinput%

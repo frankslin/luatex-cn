@@ -377,7 +377,13 @@ local function process_page_nodes(p_head, layout_map, params, ctx)
                     if id == constants.GLYPH then
                         local dec_id = D.get_attribute(curr, constants.ATTR_DECORATE_ID)
                         if dec_id and dec_id > 0 then
-                            p_head = decorate_mod.handle_node(curr, p_head, pos, params, ctx, dec_id)
+                            -- Dispatch by decoration type
+                            local dec_reg = _G.decorate_registry and _G.decorate_registry[dec_id]
+                            if dec_reg and dec_reg.type == "side_text" then
+                                p_head = decorate_mod.handle_side_text_node(curr, p_head, pos, params, ctx, dec_id)
+                            else
+                                p_head = decorate_mod.handle_node(curr, p_head, pos, params, ctx, dec_id)
+                            end
                             -- Remove the original marker node to prevent ghost rendering at (0,0)
                             p_head = D.remove(p_head, curr)
                             node.flush_node(D.tonode(curr))

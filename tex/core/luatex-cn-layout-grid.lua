@@ -1632,6 +1632,7 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
             band = dec_band,
             y_sp = dec_y_sp,
             band_y_offset_sp = dec_band_y_off,
+            cell_height = ctx.last_char_cell_height or grid_height,
             -- P2: absolute coordinates
             x = h.compute_x(dec_col, dec_page, ctx),
             y = h.compute_y(dec_y_sp, dec_band_y_off, ctx),
