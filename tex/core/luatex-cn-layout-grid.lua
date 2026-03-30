@@ -1835,9 +1835,11 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
         end
 
         local H_sp = H * grid_height
-        -- Start distributing from fill_pad_top
-        local dist_start_y = math.max(col_start_y, fill_pad_top)
-        local available_sp = H_sp - (dist_start_y - fill_pad_top)
+        -- Start distributing from col_start_y (not fill_pad_top).
+        -- shift_y already includes c_padding_top, so adding fill_pad_top here
+        -- would double-apply the top padding.
+        local dist_start_y = col_start_y
+        local available_sp = H_sp - dist_start_y
         if total_char_height > available_sp then
             -- Squeeze mode
             v_scale_all = available_sp / total_char_height
