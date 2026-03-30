@@ -162,6 +162,9 @@
     layout-mode .tl_set:N = \l__luatexcn_content_layout_mode_tl,
     layout-mode .initial:n = {grid},
 
+    ignore-spaces .bool_set:N = \l__luatexcn_content_ignore_spaces_bool,
+    ignore-spaces .initial:n = {true},
+
     inter-cell-gap .tl_set:N = \l__luatexcn_content_inter_cell_gap_tl,
     inter-cell-gap .initial:n = {0pt},
 
@@ -258,6 +261,7 @@
         font_color~=~[=[\l__luatexcn_content_font_rgb_tl]=],
         font_size~=~[=[\luaescapestring{\l__luatexcn_content_font_size_tl}]=],
         layout_mode~=~[=[\luaescapestring{\l__luatexcn_content_layout_mode_tl}]=],
+        ignore_spaces~=~\bool_if:NTF~\l__luatexcn_content_ignore_spaces_bool~{true}{false},
         inter_cell_gap~=~[=[\luaescapestring{\l__luatexcn_content_inter_cell_gap_tl}]=],
         cell_height~=~[=[\luaescapestring{\l__luatexcn_content_cell_height_tl}]=],
         cell_width~=~[=[\luaescapestring{\l__luatexcn_content_cell_width_tl}]=],
@@ -594,6 +598,7 @@
     行距 .tl_set:N = \l__luatexcn_content_line_spacing_tl,
     版心比例 .tl_set:N = \l__luatexcn_content_banxin_ratio_tl,
     布局模式 .tl_set:N = \l__luatexcn_content_layout_mode_tl,
+    忽略空格 .bool_set:N = \l__luatexcn_content_ignore_spaces_bool,
     字间隙 .tl_set:N = \l__luatexcn_content_inter_cell_gap_tl,
     字格高 .tl_set:N = \l__luatexcn_content_cell_height_tl,
     字格宽 .tl_set:N = \l__luatexcn_content_cell_width_tl,

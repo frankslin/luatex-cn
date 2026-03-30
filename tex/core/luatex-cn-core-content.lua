@@ -125,6 +125,8 @@ _G.content.border_thickness = _G.content.border_thickness or 26214 -- 0.4pt
 _G.content.border_color = _G.content.border_color or "0 0 0"
 _G.content.padding_top = _G.content.padding_top or 0
 _G.content.padding_bottom = _G.content.padding_bottom or 0
+-- Ignore inter-word space glue in flatten phase (only \空格 produces output)
+_G.content.ignore_spaces = (_G.content.ignore_spaces ~= false) and true or false
 -- Granular border control (nil = inherit from border_on)
 -- column_border: column-to-column vertical lines
 -- band_border: horizontal band divider lines
@@ -206,6 +208,9 @@ local function parse_visual_params(params)
     end
     if params.layout_mode and params.layout_mode ~= "" then
         _G.content.layout_mode = params.layout_mode
+    end
+    if params.ignore_spaces ~= nil then
+        _G.content.ignore_spaces = (params.ignore_spaces == true or params.ignore_spaces == "true")
     end
     if params.inter_cell_gap then
         _G.content.inter_cell_gap = constants.to_dimen(params.inter_cell_gap) or 0

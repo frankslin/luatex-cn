@@ -121,6 +121,12 @@ local function should_keep_node(tid, subtype)
     if tid == constants.GLYPH or tid == constants.KERN then
         return true
     elseif tid == constants.GLUE or tid == constants.WHATSIT then
+        -- Skip inter-word space glue (subtype 0) in ignore-spaces mode.
+        -- \空格 outputs U+3000 glyph nodes, so it is unaffected.
+        if tid == constants.GLUE and subtype == 0
+            and _G.content and _G.content.ignore_spaces then
+            return false
+        end
         -- Keep typical glues (0), spaces (13, 14), and WHATITS
         if tid == constants.WHATSIT or subtype == 0 or subtype == 13 or subtype == 14 then
             return true
