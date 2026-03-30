@@ -293,6 +293,9 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
     -- Offset from default position (positive = inward toward column center)
     local offset_sp = constants.resolve_dimen(reg.offset, base_size) or 0
 
+    -- Column visual center
+    local col_center_x = base_x + col_width / 2
+
     -- Render a vertical column of characters on one side
     local function render_side(chars, side)
         if not chars or #chars == 0 then return end
@@ -300,13 +303,17 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
         local char_step = math.floor(base_size * scale)
         local total_h = #chars * char_step
 
-        -- X target: visual center of the side text zone
-        -- Right side = 3/4 column width, Left side = 1/4 column width
+        -- X target: position side text just outside the main character.
+        -- Distance from column center = main char half-width + side text half-width + gap.
+        -- This adapts to the main character's actual font size (base_size).
+        local main_half = base_size / 2
+        local side_half = math.floor(base_size * scale / 2)
+        local gap = math.floor(base_size * 0.05)
         local target_x
         if side == "right" then
-            target_x = base_x + col_width * 3 / 4 - offset_sp
+            target_x = col_center_x + main_half + side_half + gap - offset_sp
         else
-            target_x = base_x + col_width / 4 + offset_sp
+            target_x = col_center_x - main_half - side_half - gap + offset_sp
         end
 
         for i, char_code in ipairs(chars) do
@@ -366,12 +373,14 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
         local box_w = D.getfield(box_copy, "width") or 0
         local box_h = D.getfield(box_copy, "height") or 0
 
-        -- Horizontal: center the box in the side zone
+        -- Horizontal: position box just outside the main character
+        local main_half = base_size / 2
+        local gap = math.floor(base_size * 0.05)
         local target_x
         if side == "right" then
-            target_x = base_x + col_width * 3 / 4 - offset_sp - box_w / 2
+            target_x = col_center_x + main_half + gap - offset_sp
         else
-            target_x = base_x + col_width / 4 + offset_sp - box_w / 2
+            target_x = col_center_x - main_half - gap - box_w + offset_sp
         end
 
         -- Vertical: center box on main character
