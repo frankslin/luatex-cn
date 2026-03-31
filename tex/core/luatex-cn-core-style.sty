@@ -186,7 +186,12 @@
     % Internal: apply font if specified
     \cs_new_protected:Npn \__luatexcn_style_apply_font:
       {
-        \tl_if_empty:NF \l__luatexcn_style_size_tl
+        \tl_if_empty:NTF \l__luatexcn_style_size_tl
+          {
+            % No size: apply font family only (so font.current() reflects the change)
+            \tl_if_empty:NF \l__luatexcn_style_font_tl
+              { \setmainfont{\l__luatexcn_style_font_tl}[RawFeature={+vert,+vrt2}] }
+          }
           {
             \tl_if_empty:NTF \l__luatexcn_style_font_tl
               { \fontsize{\l__luatexcn_style_size_tl}{\l__luatexcn_style_size_tl}\selectfont }
