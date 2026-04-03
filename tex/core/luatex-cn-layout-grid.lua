@@ -1649,22 +1649,11 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
             ctx.last_glyph_row = ctx.cur_row
         end
 
-        -- Clear wrapped flag - we've processed a regular character
-        ctx.just_wrapped_column = false
-
         -- Unified layout: resolve cell height and gap
         local cell_h = resolve_cell_height(t, grid_height, ctx.default_cell_height, ctx.punct_config)
         local cell_w = resolve_cell_width(t, ctx.default_cell_width)
         -- Natural mode: 0.1em gap (proportional to font size); grid mode: 0
         local gap = ctx.default_cell_height and 0 or math.floor(cell_h * GAP_RATIO)
-
-        -- Track last character position for decoration markers
-        ctx.last_char_page = ctx.cur_page
-        ctx.last_char_col = ctx.cur_col
-        ctx.last_char_band = ctx.cur_band
-        ctx.last_char_row = ctx.cur_row
-        ctx.last_char_y_sp = ctx.cur_y_sp
-        ctx.last_char_cell_height = cell_h
 
         -- Column overflow check (sp-based)
         -- Natural mode: use actual accumulated height from buffer instead of cur_y_sp
@@ -1767,6 +1756,18 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
             cell_height = cell_h,
             cell_width = cell_w,
         })
+
+        -- Track last character position for decoration markers.
+        -- MUST be done AFTER column wrap decision so last_char_* reflects
+        -- the character's actual position (which may be in a new column).
+        ctx.last_char_page = ctx.cur_page
+        ctx.last_char_col = ctx.cur_col
+        ctx.last_char_band = ctx.cur_band
+        ctx.last_char_row = ctx.cur_row
+        ctx.last_char_y_sp = ctx.cur_y_sp
+        ctx.last_char_cell_height = cell_h
+        -- Clear wrapped flag: character has been placed in its final column.
+        ctx.just_wrapped_column = false
 
         ctx.cur_y_sp = ctx.cur_y_sp + cell_h + gap
         ctx.cur_row = math.floor(ctx.cur_y_sp / grid_height + 0.5)
