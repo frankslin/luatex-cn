@@ -236,9 +236,17 @@ local function handle_block_node(curr, p_head, pos, ctx)
     -- Sub-column support: textbox inside textflow uses sub-column positioning
     local sub_col = pos.sub_col
     if sub_col and sub_col > 0 then
-        -- Use textflow's sub-column positioning (same as glyph)
+        -- Recompute base_x using column width (not block_width_sp) to match glyph path
+        local base_x
+        if pos.x and (glyph_params.content_width or 0) > 0 then
+            local shift_x_base = glyph_params.shift_x_base or ctx.shift_x
+            base_x = shift_x_base + glyph_params.content_width - pos.x - col_width + ctx.half_thickness
+        else
+            local rtl_col = ctx.p_total_cols - 1 - pos.col
+            base_x = text_position.get_column_x(rtl_col, ctx.col_geom)
+                + ctx.half_thickness + ctx.shift_x
+        end
         local textflow = require('core.luatex-cn-core-textflow')
-        local base_x = final_x  -- column left edge
         final_x = textflow.calculate_sub_column_x_offset(
             base_x, col_width, w, sub_col, "center")
     else

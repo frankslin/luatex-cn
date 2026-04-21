@@ -257,7 +257,58 @@ python3 scripts/overlay_compare.py \
 okular /tmp/overlay.png
 ```
 
-## 7. 更新基线
+## 7. 创建 past-issue 回归测试（必须！）
+
+每个 issue 修复**必须**在 `test/regression_test/past_issue/tex/` 中创建对应的回归测试文件，防止问题复发。
+
+### 7.1 创建测试文件
+
+```bash
+# 命名格式：<feature>_issue<number>.tex
+cat > test/regression_test/past_issue/tex/<feature>_issue<number>.tex << 'EOF'
+% Issue #<number>: <问题简要描述>
+% https://github.com/open-guji/luatex-cn/issues/<number>
+%
+% 修复前: <修复前的错误行为>
+% 修复后: <修复后的正确行为>
+\documentclass{ltc-guji}
+\setmainfont{TW-Kai}
+\关闭分页
+\无标点模式
+
+\title{测试}
+\chapter{Issue <number>}
+
+\begin{document}
+\begin{正文}
+% 从 test_example 复制已验证的最小复现用例
+% 包含多个测试场景（正常用法 + 边缘情况）
+\end{正文}
+\end{document}
+EOF
+```
+
+**测试文件要求**：
+- 文件头注释包含 issue 编号、GitHub URL、修复前后行为描述
+- 包含正常对照（不受影响的基线场景）
+- 包含核心复现场景（触发 bug 的用例）
+- 可选：包含边缘情况（auto-balance 切换、不同 textbox 类型等）
+
+### 7.2 生成 baseline
+
+```bash
+# 生成 past_issue suite 的 baseline
+python3 test/regression_test.py save --past-issues
+```
+
+### 7.3 验证测试通过
+
+```bash
+# 确认新测试能通过
+python3 test/regression_test.py check --past-issues
+```
+
+## 8. 更新基线
 
 **仅当**修复导致了预期的视觉变化时更新基线：
 
@@ -282,9 +333,9 @@ python3 test/regression_test.py save test/regression_test/past_issue/tex/<test-f
 python3 test/regression_test.py check
 ```
 
-## 8. 提交代码
+## 9. 提交代码
 
-### 8.1 检查变更
+### 9.1 检查变更
 
 // turbo
 ```bash
@@ -298,7 +349,7 @@ git diff
 - ✅ 新增的测试文件（如果在 past_issue 中创建了新测试）
 - ❌ **不应该有** PDF、辅助文件、diff/current 目录下的文件
 
-### 8.2 暂存文件
+### 9.2 暂存文件
 
 只暂存需要提交的文件：
 ```bash
@@ -315,7 +366,7 @@ git add test/regression_test/past_issue/tex/<new-test>.tex  # 如果创建了新
 - ❌ `*.aux`, `*.log`, `*.out` - LaTeX 辅助文件
 - ❌ `test_example/` 下的任何文件（仅用于本地测试）
 
-### 8.3 编写提交信息
+### 9.3 编写提交信息
 
 使用规范的提交信息格式。**标题必须包含 `fix #<number>`**（不是 `(#number)`），这样 GitHub Actions 才能自动关联 issue：
 ```bash
@@ -340,7 +391,7 @@ Co-Authored-By: Claude <model> <noreply@anthropic.com>
 4. **技术细节**：如有必要，解释实现方案和考虑因素
 5. **Co-Authored-By**：标注协作者
 
-## 9. 最终验证
+## 10. 最终验证
 
 // turbo
 提交后再次运行回归测试确保一切正常：
@@ -350,14 +401,14 @@ python3 test/regression_test.py check
 
 **所有测试应该显示 PASSED**（基线已更新，不应再有差异）
 
-## 10. 推送代码
+## 11. 推送代码
 
 ```bash
 # 推送到远程 dev 分支
 git push origin dev
 ```
 
-## 11. 在 Issue 中添加修复总结
+## 12. 在 Issue 中添加修复总结
 
 推送成功后，在 issue 中添加修复总结 comment。
 

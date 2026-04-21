@@ -1,0 +1,38 @@
+% Issue #96: 夹注内八角框（textbox）不能只圈住单行小字
+% https://github.com/open-guji/luatex-cn/issues/96
+%
+% 修复前: textbox 在夹注内横跨整栏宽度（两个 sub-column）
+% 修复后: textbox 作为 textflow 内联块，只占一个 sub-column
+\documentclass[四库全书]{ltc-guji}
+\setmainfont{TW-Kai}
+\关闭分页
+\无标点模式
+
+\jiazhuSetup{
+  align = inward,
+  font = FandolSong,
+}
+
+\title{测试}
+\chapter{Issue 96}
+
+\begin{document}
+\begin{正文}
+
+% 测试 1: 正文中的 octagon（基线对照，不应受影响）
+正文\octagon{真珠}后正文
+
+% 测试 2: 夹注开头的 octagon（单字）
+正文\夹注{\octagon{生}上}后正文
+
+% 测试 3: 夹注中间的 octagon（多字，核心场景）
+正文\夹注{说书中能大事和金那里把人灰且养就这其中\octagon{天下大}到地上霜从来都好在其中看到三分意思有说到得}后正文
+
+% 测试 4: auto-balance=false 模式下的 octagon
+正文\夹注[auto-balance=false]{不平衡\octagon{甲乙}测试文字继续}后正文
+
+% 测试 5: 其他 textbox 类型在夹注内（墨围、反白）
+正文\夹注{测试\墨围{甲}字和\反白{乙}字在夹注中}后正文
+
+\end{正文}
+\end{document}
