@@ -150,14 +150,17 @@ function textflow.collect_nodes(start_node, opts)
             break
         end
 
-        -- Stop at textbox nodes (HLIST/VLIST with textbox attributes).
-        -- Textbox inside textflow cannot be handled as textflow glyphs;
-        -- they will be processed independently by layout-grid's textbox path.
+        -- Collect textbox nodes (HLIST/VLIST with textbox attributes) as
+        -- inline blocks within textflow. They will be placed in a sub-column
+        -- alongside regular glyphs. (#96)
         if (tid == constants.HLIST or tid == constants.VLIST) then
             local tw = D.get_attribute(temp_t, constants.ATTR_TEXTBOX_WIDTH) or 0
             local th = D.get_attribute(temp_t, constants.ATTR_TEXTBOX_HEIGHT) or 0
             if tw > 0 and th > 0 then
-                break
+                table.insert(nodes, temp_t)
+                last_content_node = temp_t
+                temp_t = D.getnext(temp_t)
+                goto continue_collect
             end
         end
 
@@ -202,6 +205,7 @@ function textflow.collect_nodes(start_node, opts)
             table.insert(nodes, temp_t)
             last_content_node = temp_t
         end
+        ::continue_collect::
         temp_t = D.getnext(temp_t)
     end
 
@@ -540,23 +544,36 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
         forced_indent_extra_sp = (ctx.cur_row - forced_indent_value) * gh
     end
     -- Build node_heights table: per-node grid-height from style override
+    -- For textbox (HLIST/VLIST) nodes, use ATTR_TEXTBOX_HEIGHT_SP as their height
     local node_heights = nil
     for i, n in ipairs(nodes) do
-        local sid = D.get_attribute(n, constants.ATTR_STYLE_REG_ID)
-        if sid and sid > 0 then
-            local sgh = style_registry.get_grid_height(sid)
-            if sgh and sgh > 0 and sgh ~= gh then
-                if not node_heights then
-                    -- Lazy init: fill previous entries with default
-                    node_heights = {}
-                    for j = 1, i - 1 do node_heights[j] = gh end
+        local nid = D.getid(n)
+        local tb_h_sp = nil
+        if nid == constants.HLIST or nid == constants.VLIST then
+            tb_h_sp = D.get_attribute(n, constants.ATTR_TEXTBOX_HEIGHT_SP)
+        end
+        if tb_h_sp and tb_h_sp > 0 then
+            if not node_heights then
+                node_heights = {}
+                for j = 1, i - 1 do node_heights[j] = gh end
+            end
+            node_heights[i] = tb_h_sp
+        else
+            local sid = D.get_attribute(n, constants.ATTR_STYLE_REG_ID)
+            if sid and sid > 0 then
+                local sgh = style_registry.get_grid_height(sid)
+                if sgh and sgh > 0 and sgh ~= gh then
+                    if not node_heights then
+                        node_heights = {}
+                        for j = 1, i - 1 do node_heights[j] = gh end
+                    end
+                    node_heights[i] = sgh
+                elseif node_heights then
+                    node_heights[i] = gh
                 end
-                node_heights[i] = sgh
             elseif node_heights then
                 node_heights[i] = gh
             end
-        elseif node_heights then
-            node_heights[i] = gh
         end
     end
 
@@ -620,8 +637,14 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
             end
 
             -- Resolve per-node cell height for entry.cell_height
+            local nid = D.getid(node_info.node)
+            local is_tb_block = (nid == constants.HLIST or nid == constants.VLIST)
+                and (D.get_attribute(node_info.node, constants.ATTR_TEXTBOX_WIDTH) or 0) > 0
             local node_cell_h
-            if node_info.sub_col then
+            if is_tb_block then
+                -- Textbox block: use precise sp height
+                node_cell_h = D.get_attribute(node_info.node, constants.ATTR_TEXTBOX_HEIGHT_SP) or gh
+            elseif node_info.sub_col then
                 node_cell_h = gh  -- default: global grid_height
                 local sid = D.get_attribute(node_info.node, constants.ATTR_STYLE_REG_ID)
                 if sid and sid > 0 then
@@ -656,6 +679,12 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
                 x = helpers.compute_x(ctx.cur_col, ctx.cur_page, ctx),
                 y = helpers.compute_y(tf_y_sp, tf_band_y_off, ctx),
             }
+            -- Textbox block: mark as block with width/height for render phase
+            if is_tb_block then
+                entry.is_block = true
+                entry.width = 1
+                entry.height = D.get_attribute(node_info.node, constants.ATTR_TEXTBOX_HEIGHT) or 1
+            end
             if not node_info.sub_col then
                 entry.cell_width = helpers.resolve_cell_width(node_info.node, nil)
             end

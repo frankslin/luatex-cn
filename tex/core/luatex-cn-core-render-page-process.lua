@@ -220,6 +220,7 @@ local function handle_block_node(curr, p_head, pos, ctx)
 
     local col_width = text_position.get_column_width(pos.col, ctx.col_geom)
     local block_width_sp = (pos.width or 1) * col_width
+
     local final_x
     if pos.x and (glyph_params.content_width or 0) > 0 then
         -- RTL pos.x path: pos.x is right edge of block, block extends left by block_width_sp
@@ -232,18 +233,28 @@ local function handle_block_node(curr, p_head, pos, ctx)
             + ctx.half_thickness + ctx.shift_x
     end
 
-    -- Center TextBox grid area within outer column.
-    local tb_w_attr = D.get_attribute(curr, constants.ATTR_TEXTBOX_WIDTH)
-    if tb_w_attr and tb_w_attr > 0 then
-        local tb_content_width = block_width_sp
-        local tb_grid_w = D.get_attribute(curr, constants.ATTR_TEXTBOX_GRID_WIDTH)
-        if tb_grid_w and tb_grid_w > 0 and tb_grid_w < col_width then
-            local inner_grid_total = tb_w_attr * tb_grid_w
-            local centering = math.floor((tb_content_width - inner_grid_total) / 2)
-            final_x = final_x + centering
-        elseif w < tb_content_width then
-            local centering = math.floor((tb_content_width - w) / 2)
-            final_x = final_x + centering
+    -- Sub-column support: textbox inside textflow uses sub-column positioning
+    local sub_col = pos.sub_col
+    if sub_col and sub_col > 0 then
+        -- Use textflow's sub-column positioning (same as glyph)
+        local textflow = require('core.luatex-cn-core-textflow')
+        local base_x = final_x  -- column left edge
+        final_x = textflow.calculate_sub_column_x_offset(
+            base_x, col_width, w, sub_col, "center")
+    else
+        -- Center TextBox grid area within outer column.
+        local tb_w_attr = D.get_attribute(curr, constants.ATTR_TEXTBOX_WIDTH)
+        if tb_w_attr and tb_w_attr > 0 then
+            local tb_content_width = block_width_sp
+            local tb_grid_w = D.get_attribute(curr, constants.ATTR_TEXTBOX_GRID_WIDTH)
+            if tb_grid_w and tb_grid_w > 0 and tb_grid_w < col_width then
+                local inner_grid_total = tb_w_attr * tb_grid_w
+                local centering = math.floor((tb_content_width - inner_grid_total) / 2)
+                final_x = final_x + centering
+            elseif w < tb_content_width then
+                local centering = math.floor((tb_content_width - w) / 2)
+                final_x = final_x + centering
+            end
         end
     end
 
