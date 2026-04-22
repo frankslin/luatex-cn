@@ -246,13 +246,24 @@ local function handle_block_node(curr, p_head, pos, ctx)
             base_x = text_position.get_column_x(rtl_col, ctx.col_geom)
                 + ctx.half_thickness + ctx.shift_x
         end
-        local textflow = require('core.luatex-cn-core-textflow')
-        -- Textbox always centers in sub-column. Since the vbox already contains
-        -- centered content (with outer-margin padding), forcing sub-col center
-        -- puts the visual content at the sub-col center, aligned with surrounding
-        -- small chars regardless of the textflow align setting.
-        final_x = textflow.calculate_sub_column_x_offset(
-            base_x, col_width, w, sub_col, "center")
+        -- Verified via node inspection: textbox vbox has margin_left = 0,
+        -- i.e. the inner content (char) sits at vbox.left. So the textbox
+        -- position needs to match calculate_sub_column_x_offset's return
+        -- value directly (which is where small chars are placed).
+        local half_width = col_width / 2
+        local inner_padding = half_width * 0.05  -- matches calculate_sub_column_x_offset
+        local tb_w_attr = D.get_attribute(curr, constants.ATTR_TEXTBOX_WIDTH)
+        local tb_grid_w = D.get_attribute(curr, constants.ATTR_TEXTBOX_GRID_WIDTH)
+        local inner_grid_total = (tb_w_attr and tb_w_attr > 0 and tb_grid_w and tb_grid_w > 0)
+            and (tb_w_attr * tb_grid_w) or w
+        if sub_col == 1 then
+            -- sub_col=1 + inward = left align in sub-col: vbox.left at column_center + inner_padding
+            final_x = base_x + half_width + inner_padding
+        else
+            -- sub_col=2 + inward = right align in sub-col: content.right at column_center - inner_padding
+            -- content.right = vbox.left + inner_grid_total (since margin_left=0)
+            final_x = base_x + half_width - inner_grid_total - inner_padding
+        end
     else
         -- Center TextBox grid area within outer column.
         local tb_w_attr = D.get_attribute(curr, constants.ATTR_TEXTBOX_WIDTH)
