@@ -247,8 +247,12 @@ local function handle_block_node(curr, p_head, pos, ctx)
                 + ctx.half_thickness + ctx.shift_x
         end
         local textflow = require('core.luatex-cn-core-textflow')
+        -- Use the same alignment as textflow glyphs (from node's style or ctx default)
+        local tb_style_id = D.get_attribute(curr, constants.ATTR_STYLE_REG_ID)
+        local tb_style = tb_style_id and style_registry.get(tb_style_id)
+        local tf_align = (tb_style and tb_style.textflow_align) or ctx.textflow_align or "outward"
         final_x = textflow.calculate_sub_column_x_offset(
-            base_x, col_width, w, sub_col, "center")
+            base_x, col_width, w, sub_col, tf_align)
     else
         -- Center TextBox grid area within outer column.
         local tb_w_attr = D.get_attribute(curr, constants.ATTR_TEXTBOX_WIDTH)

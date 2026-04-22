@@ -553,11 +553,16 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
             tb_h_sp = D.get_attribute(n, constants.ATTR_TEXTBOX_HEIGHT_SP)
         end
         if tb_h_sp and tb_h_sp > 0 then
+            -- Use textbox outer row count × gh so it occupies the correct
+            -- number of textflow rows (ATTR_TEXTBOX_HEIGHT_SP uses inner
+            -- grid_height which is smaller than textflow's gh).
+            local tb_rows = D.get_attribute(n, constants.ATTR_TEXTBOX_HEIGHT) or 1
+            local effective_h = tb_rows * gh
             if not node_heights then
                 node_heights = {}
                 for j = 1, i - 1 do node_heights[j] = gh end
             end
-            node_heights[i] = tb_h_sp
+            node_heights[i] = effective_h
         else
             local sid = D.get_attribute(n, constants.ATTR_STYLE_REG_ID)
             if sid and sid > 0 then
@@ -642,8 +647,9 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
                 and (D.get_attribute(node_info.node, constants.ATTR_TEXTBOX_WIDTH) or 0) > 0
             local node_cell_h
             if is_tb_block then
-                -- Textbox block: use precise sp height
-                node_cell_h = D.get_attribute(node_info.node, constants.ATTR_TEXTBOX_HEIGHT_SP) or gh
+                -- Textbox block: use outer row count × gh to match process_sequence allocation
+                local tb_rows = D.get_attribute(node_info.node, constants.ATTR_TEXTBOX_HEIGHT) or 1
+                node_cell_h = tb_rows * gh
             elseif node_info.sub_col then
                 node_cell_h = gh  -- default: global grid_height
                 local sid = D.get_attribute(node_info.node, constants.ATTR_STYLE_REG_ID)
