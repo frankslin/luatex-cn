@@ -671,16 +671,28 @@ local function generate_physical_pages(list, params, engine_ctx, plugin_contexts
         new_box.list = content_head
         new_box.width = page_info.cols * engine_ctx.g_width + engine_ctx.border_thickness + outer_shift * 2
         new_box.height = 0
-        new_box.depth = total_v_depth
+        -- For textbox with auto-height: size the box to exactly the outer
+        -- grid rows it occupies (tb_rows × outer_grid_height), not the full
+        -- line_limit budget. This prevents extra whitespace after the textbox
+        -- in surrounding body/jiazhu text.
+        if p_info.is_textbox and page_info.height_sp and not engine_ctx.user_height_sp then
+            local outer_gh = (_G.textbox and _G.textbox.outer_grid_height) or engine_ctx.g_height
+            local tb_rows = math.max(1, math.floor(page_info.height_sp / engine_ctx.g_height + 0.5))
+            new_box.depth = tb_rows * outer_gh
+        else
+            new_box.depth = total_v_depth
+        end
 
         if p_info.is_textbox then
             node.set_attribute(new_box, constants.ATTR_TEXTBOX_WIDTH, page_info.cols)
             -- Store inner grid_width for precise centering in handle_block_node
             node.set_attribute(new_box, constants.ATTR_TEXTBOX_GRID_WIDTH, engine_ctx.g_width)
             -- Use actual content height for auto-height, or line_limit for fixed-height
-            -- height_sp is in scaled points; convert to row count for occupancy grid
+            -- height_sp is in scaled points; convert to row count for occupancy grid.
+            -- Use round (not ceil) to avoid over-counting rows when height_sp
+            -- includes border/outer-margin padding slightly larger than g_height.
             local tb_rows = page_info.height_sp
-                and math.ceil(page_info.height_sp / engine_ctx.g_height)
+                and math.max(1, math.floor(page_info.height_sp / engine_ctx.g_height + 0.5))
                 or engine_ctx.line_limit
             node.set_attribute(new_box, constants.ATTR_TEXTBOX_HEIGHT, tb_rows)
             -- Store precise height in sp for natural layout mode
