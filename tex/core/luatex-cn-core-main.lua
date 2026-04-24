@@ -676,6 +676,8 @@ local function generate_physical_pages(list, params, engine_ctx, plugin_contexts
         -- line_limit budget. This prevents extra whitespace after the textbox
         -- in surrounding body/jiazhu text.
         if p_info.is_textbox and page_info.height_sp and not engine_ctx.user_height_sp then
+            -- Use outer grid_height × tb_rows so the textbox occupies exactly
+            -- tb_rows outer (content/jiazhu) rows, matching surrounding text flow.
             local outer_gh = (_G.textbox and _G.textbox.outer_grid_height) or engine_ctx.g_height
             local tb_rows = math.max(1, math.floor(page_info.height_sp / engine_ctx.g_height + 0.5))
             new_box.depth = tb_rows * outer_gh
