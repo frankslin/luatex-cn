@@ -1131,6 +1131,11 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 cell_col_borders_map = cell_column_borders
             end
 
+            -- Per-cell column borders are keyed by absolute cell_idx, which
+            -- corresponds to specific cells on the start page only. On overflow
+            -- pages, those cell positions are different (or empty) so applying
+            -- the same map would draw spurious vertical lines at wrong places.
+            local pg_cell_borders = (pg == start_page) and cell_col_borders_map or nil
             ctx.page_table_bands[pg] = {
                 n_bands = ctx.n_bands,
                 band_heights_sp = ctx.band_heights_sp,
@@ -1141,7 +1146,7 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 column_border = tparams.column_border,
                 band_border = tparams.band_border,
                 band_column_borders = band_column_borders,
-                cell_column_borders = cell_col_borders_map,
+                cell_column_borders = pg_cell_borders,
                 column_fill = tparams_cf,
                 -- Debug: save cell column groups for cell coordinate debug
                 col_groups = all_col_groups,
