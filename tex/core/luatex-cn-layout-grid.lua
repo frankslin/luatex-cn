@@ -430,6 +430,19 @@ local function wrap_to_next_column(ctx, p_cols, interval, grid_height, indent, r
     end
 
     if should_wrap_page then
+        -- In table mode, save cum offset BEFORE wrap so the subsequent
+        -- target_col in PENALTY_CELL_BREAK is rebased to the new page.
+        -- Counts cells already finished (cell_idx); the cell currently
+        -- rendering will continue at col 0 of the new page.
+        if ctx.table_render_cell_idx ~= nil and ctx.band_mode == "parallel" then
+            local all_col_groups_w = (_G.content and _G.content.table_col_groups) or {}
+            local col_groups_w = all_col_groups_w[ctx.cur_band] or {}
+            local cum_so_far = 0
+            for i = 1, ctx.table_render_cell_idx do
+                cum_so_far = cum_so_far + (col_groups_w[i] or 0)
+            end
+            ctx.table_render_cum_offset = cum_so_far
+        end
         ctx.cur_page = ctx.cur_page + 1
         -- Always reset page_has_content on page turn:
         -- new page has no content yet regardless of reset_content flag.
@@ -782,6 +795,7 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
             -- Reset table cell index for new band (row)
             if ctx.table_start_col ~= nil then
                 ctx.table_render_cell_idx = 0
+                ctx.table_render_cum_offset = 0
             end
             ctx.cur_band = ctx.cur_band + 1
             if ctx.cur_band >= ctx.n_bands then
@@ -834,13 +848,18 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
             local cell_width = col_groups[cell_idx + 1] or 0
 
             if cell_width > 0 then
-                -- Fixed-width cell: jump to start of next group
+                -- Fixed-width cell: jump to start of next group.
+                -- cum_offset is set when a mid-band page-wrap occurred,
+                -- to rebase target_col relative to the new page (otherwise
+                -- target_col would still reflect pre-wrap position, leaving
+                -- large gaps between cells across pages).
                 local band_start = ctx.table_start_col
                 local cum = 0
                 for i = 1, cell_idx + 1 do
                     cum = cum + (col_groups[i] or 0)
                 end
-                local target_col = band_start + cum
+                local cum_offset = ctx.table_render_cum_offset or 0
+                local target_col = band_start + (cum - cum_offset)
                 -- If the previous cell's content overflowed past the target column
                 -- (e.g. auto-width cells contributed 0 to cum but consumed real columns),
                 -- use current position + cell_width, ensuring at least 1 column advance.
@@ -860,6 +879,13 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 local band_start = ctx.table_start_col or 0
                 local cols_in_band = ctx.band_cols_per_band
                 if ctx.cur_col >= band_start + cols_in_band then
+                    -- Save cum offset BEFORE wrap so subsequent target_col is
+                    -- rebased to the new page.
+                    local cum_so_far = 0
+                    for i = 1, cell_idx + 1 do
+                        cum_so_far = cum_so_far + (col_groups[i] or 0)
+                    end
+                    ctx.table_render_cum_offset = cum_so_far
                     ctx.cur_page = ctx.cur_page + 1
                     ctx.table_max_page = math.max(ctx.table_max_page or ctx.cur_page, ctx.cur_page)
                     if ctx.table_band_max_page then
@@ -1016,6 +1042,8 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         -- Track max page each band reaches (for per-page border rendering)
         ctx.table_band_max_page = {}
         ctx.table_render_cell_idx = 0
+        -- Cum offset for target_col rebase after page-wrap mid-band
+        ctx.table_render_cum_offset = 0
         -- Save band formats for per-band padding lookup
         ctx.table_band_formats = _G.content and _G.content.table_band_formats or nil
         -- Apply band 0 padding
