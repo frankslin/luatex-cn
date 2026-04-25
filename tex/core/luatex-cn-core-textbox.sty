@@ -331,10 +331,21 @@
           { \dim_set:Nn #1 { \l__luatexcn_content_cell_width_tl } }
       }
   }
+% Resolve inner grid-height for border-shape textbox commands.
+% Behavior depends on context:
+%   * Inside jiazhu: use outer grid-height so internal rows align with
+%     surrounding small-char rows (row pitch matches outer).
+%   * In body (legacy / natural mode): caller post-multiplies by 1.2
+%     after this call. The resolver itself returns 1em or
+%     content_cell_height_tl as a base.
 \cs_new:Nn \__luatexcn_textbox_resolve_cell_gh:N
   {
     \int_compare:nNnTF { \the\cnverticaljiazhu } > { 0 }
-      { \dim_set:Nn #1 { 1em } }
+      {
+        \tl_if_empty:NTF \l__luatexcn_content_grid_height_tl
+          { \dim_set:Nn #1 { 1.2em } }
+          { \dim_set:Nn #1 { \l__luatexcn_content_grid_height_tl } }
+      }
       {
         \tl_if_empty:NTF \l__luatexcn_content_cell_height_tl
           { \dim_set:Nn #1 { 1em } }
@@ -354,6 +365,7 @@
 % ============================================================
 
 % -- 反白：黑底白字，无边框 --
+% 不强制 1.2x 高度（无边框，字格高度即可）
 \NewDocumentCommand{\反白}{ O{} m }
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
@@ -372,7 +384,8 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 }
+    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
+      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       border-shape=rect,
       grid-width=\l_tmpa_dim,
@@ -390,7 +403,8 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 }
+    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
+      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       background-color={0.2~0.2~0.2},
       font-color=white,
@@ -410,7 +424,8 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 }
+    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
+      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       border-shape=octagon,
       grid-width=\l_tmpa_dim,
@@ -428,7 +443,8 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 }
+    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
+      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       background-color={0.2~0.2~0.2},
       font-color=white,
@@ -444,6 +460,7 @@
   }
 
 % -- 带圈：圆形边框 --
+% 不强制 1.2x 高度（圆形几何已有视觉空间）
 \NewDocumentCommand{\带圈}{ O{} m }
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim

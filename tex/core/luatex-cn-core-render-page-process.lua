@@ -287,19 +287,6 @@ local function handle_block_node(curr, p_head, pos, ctx)
     end
 
     local final_y_top = -pos.y_sp - (pos.band_y_offset_sp or 0) - ctx.shift_y
-    -- For textbox in sub-column: outer row height (pos.cell_height / tb_rows)
-    -- is typically larger than textbox's inner row height (tb_h_sp / tb_rows).
-    -- Small chars are centered in their outer row via v_align="center", so
-    -- we offset the textbox by half-row-diff to keep its first row aligned
-    -- with the surrounding small chars.
-    if pos.sub_col and pos.sub_col > 0 and pos.cell_height then
-        local tb_h_sp = D.get_attribute(curr, constants.ATTR_TEXTBOX_HEIGHT_SP)
-        local tb_rows = pos.height or 1
-        if tb_h_sp and tb_h_sp > 0 and tb_rows > 0 and tb_h_sp < pos.cell_height then
-            local v_offset = math.floor((pos.cell_height - tb_h_sp) / (2 * tb_rows))
-            final_y_top = final_y_top - v_offset
-        end
-    end
     D.setfield(curr, "shift", -final_y_top + h)
 
     local k_pre = D.new(constants.KERN)
