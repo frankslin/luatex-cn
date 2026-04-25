@@ -1081,13 +1081,6 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
         local end_page = ctx.cur_page
         local band_max_page = ctx.table_band_max_page or {}
         for pg = start_page, end_page do
-            -- For overflow pages in parallel mode, skip table band info.
-            -- Only the start page gets band structure; overflow pages render
-            -- content as plain columns without band divider lines.
-            if pg > start_page and ctx.band_mode == "parallel" then
-                goto continue_page
-            end
-
             do
             local tparams = _G.content and _G.content.table_params or {}
             -- Build per-band column_border map from band_formats
@@ -1127,7 +1120,6 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 n_columns = ctx.band_cols_per_band,
             }
             end
-            ::continue_page::
         end
 
         -- Move to next column after the table
