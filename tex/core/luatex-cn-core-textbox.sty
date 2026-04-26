@@ -332,12 +332,11 @@
       }
   }
 % Resolve inner grid-height for border-shape textbox commands.
-% Behavior depends on context:
-%   * Inside jiazhu: use outer grid-height so internal rows align with
-%     surrounding small-char rows (row pitch matches outer).
-%   * In body (legacy / natural mode): caller post-multiplies by 1.2
-%     after this call. The resolver itself returns 1em or
-%     content_cell_height_tl as a base.
+% Use outer grid_height so the textbox's internal row pitch matches the
+% surrounding text — this prevents content overflow into the next row
+% (#96 follow-up: body \octagon{真珠} previously overlapped the next
+% glyph because gh = gw * 1.2 = 33.6pt > outer 28.5pt). Falls back to
+% 1.2em when no outer grid is set.
 \cs_new:Nn \__luatexcn_textbox_resolve_cell_gh:N
   {
     \int_compare:nNnTF { \the\cnverticaljiazhu } > { 0 }
@@ -348,7 +347,11 @@
       }
       {
         \tl_if_empty:NTF \l__luatexcn_content_cell_height_tl
-          { \dim_set:Nn #1 { 1em } }
+          {
+            \tl_if_empty:NTF \l__luatexcn_content_grid_height_tl
+              { \dim_set:Nn #1 { 1.2em } }
+              { \dim_set:Nn #1 { \l__luatexcn_content_grid_height_tl } }
+          }
           { \dim_set:Nn #1 { \l__luatexcn_content_cell_height_tl } }
       }
   }
@@ -384,8 +387,6 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
-      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       border-shape=rect,
       grid-width=\l_tmpa_dim,
@@ -403,8 +404,6 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
-      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       background-color={0.2~0.2~0.2},
       font-color=white,
@@ -424,8 +423,6 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
-      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       border-shape=octagon,
       grid-width=\l_tmpa_dim,
@@ -443,8 +440,6 @@
   {
     \__luatexcn_textbox_resolve_cell_gw:N \l_tmpa_dim
     \__luatexcn_textbox_resolve_cell_gh:N \l_tmpb_dim
-    \int_compare:nNnF { \the\cnverticaljiazhu } > { 0 }
-      { \dim_set:Nn \l_tmpb_dim { \l_tmpa_dim * 12 / 10 } }
     \TextBox[
       background-color={0.2~0.2~0.2},
       font-color=white,
