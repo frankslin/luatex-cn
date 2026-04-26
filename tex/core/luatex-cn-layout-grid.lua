@@ -2499,9 +2499,10 @@ local function calculate_grid_positions(head, grid_height, line_limit, n_column,
         end
 
         local is_textflow = D.get_attribute(t, constants.ATTR_JIAZHU) == 1
-        -- Textbox nodes with jiazhu attribute should NOT enter textflow path;
-        -- they will be handled as independent textbox blocks below.
-        if is_textflow and not (tb_w > 0 and tb_h > 0) then
+        -- Textboxes inside jiazhu enter textflow as inline blocks so they
+        -- get sub-column placement (#96). collect_nodes recognises HLIST/
+        -- VLIST with TEXTBOX_WIDTH > 0 as inline-block content.
+        if is_textflow then
             local textflow = package.loaded['core.luatex-cn-core-textflow'] or
                 require('core.luatex-cn-core-textflow')
 

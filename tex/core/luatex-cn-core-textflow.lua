@@ -153,6 +153,10 @@ function textflow.collect_nodes(start_node, opts)
         -- Collect textbox nodes (HLIST/VLIST with textbox attributes) as
         -- inline blocks within textflow. They will be placed in a sub-column
         -- alongside regular glyphs. (#96)
+        --
+        -- Note: we set temp_t to the next sibling and goto continue_advance
+        -- (NOT continue_collect) because the label below also calls getnext;
+        -- jumping to continue_collect would double-advance and skip a node.
         if (tid == constants.HLIST or tid == constants.VLIST) then
             local tw = D.get_attribute(temp_t, constants.ATTR_TEXTBOX_WIDTH) or 0
             local th = D.get_attribute(temp_t, constants.ATTR_TEXTBOX_HEIGHT) or 0
@@ -160,7 +164,7 @@ function textflow.collect_nodes(start_node, opts)
                 table.insert(nodes, temp_t)
                 last_content_node = temp_t
                 temp_t = D.getnext(temp_t)
-                goto continue_collect
+                goto continue_advance
             end
         end
 
@@ -207,6 +211,7 @@ function textflow.collect_nodes(start_node, opts)
         end
         ::continue_collect::
         temp_t = D.getnext(temp_t)
+        ::continue_advance::
     end
 
     return nodes, temp_t, hit_column_break, decorate_map

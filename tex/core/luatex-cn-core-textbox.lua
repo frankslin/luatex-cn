@@ -585,6 +585,11 @@ function textbox.process_inner_box(box_num, params)
     -- 1. Textbox should not inherit paragraph indent
     local current_indent = 0
 
+    -- Capture outer jiazhu state so the textbox result box is recognised
+    -- as inline-block by collect_nodes when the textbox is the first item
+    -- in the jiazhu sequence (#96).
+    local outer_jiazhu = tex.attribute[constants.ATTR_JIAZHU]
+
     -- 2. 解析列对齐 (from _G.textbox set by textbox.setup)
     local col_aligns = parse_column_aligns(_G.textbox.column_aligns or "")
 
@@ -597,6 +602,9 @@ function textbox.process_inner_box(box_num, params)
     -- 5. 应用属性并写回
     if res_box then
         apply_result_attributes(res_box, params, current_indent)
+        if outer_jiazhu and outer_jiazhu == 1 then
+            node.set_attribute(res_box, constants.ATTR_JIAZHU, 1)
+        end
         tex.box[box_num] = res_box
     end
 
