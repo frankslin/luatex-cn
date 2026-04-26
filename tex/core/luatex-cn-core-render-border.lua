@@ -544,21 +544,27 @@ local function draw_band_borders(p_head, params)
     -- Draw horizontal divider lines between bands (not top/bottom/left/right outer edges).
     -- The outer frame is drawn by draw_column_borders + draw_outer_border.
     -- column_padding only affects text Y-offset, not band divider positions.
+    -- skip_band_borders: bands that are empty (e.g. on overflow pages where some
+    -- bands already finished on earlier pages). Skip dividers adjacent to such
+    -- empty bands so the page doesn't show empty band rectangles.
+    local skip_band = params.skip_band_borders or {}
     for band = 0, n_bands - 2 do
-        local band_y = band_y_offsets_sp[band] or 0
-        local band_h = band_heights_sp[band] or 0
-        local divider_y = band_y + band_h
-        -- Content starts at outer_shift + border_thickness from page box origin
-        local horz_y_bp = -(outer_shift + border_thickness + divider_y) * sp_to_bp
+        if not (skip_band[band] or skip_band[band + 1]) then
+            local band_y = band_y_offsets_sp[band] or 0
+            local band_h = band_heights_sp[band] or 0
+            local divider_y = band_y + band_h
+            -- Content starts at outer_shift + border_thickness from page box origin
+            local horz_y_bp = -(outer_shift + border_thickness + divider_y) * sp_to_bp
 
-        for _, seg in ipairs(segments) do
-            local left_x_bp = (half_thickness + shift_x + seg[1]) * sp_to_bp
-            local right_x_bp = (half_thickness + shift_x + seg[2]) * sp_to_bp
-            local line = string.format(
-                "q %.2f w %s RG %.4f %.4f m %.4f %.4f l S Q",
-                b_thickness_bp, border_rgb_str,
-                left_x_bp, horz_y_bp, right_x_bp, horz_y_bp)
-            p_head = utils.insert_pdf_literal(p_head, line)
+            for _, seg in ipairs(segments) do
+                local left_x_bp = (half_thickness + shift_x + seg[1]) * sp_to_bp
+                local right_x_bp = (half_thickness + shift_x + seg[2]) * sp_to_bp
+                local line = string.format(
+                    "q %.2f w %s RG %.4f %.4f m %.4f %.4f l S Q",
+                    b_thickness_bp, border_rgb_str,
+                    left_x_bp, horz_y_bp, right_x_bp, horz_y_bp)
+                p_head = utils.insert_pdf_literal(p_head, line)
+            end
         end
     end
 
@@ -932,6 +938,7 @@ local function render_borders(p_head, params)
             total_cols = p_total_cols,
             col_range_start = range_start_rtl,
             col_range_end = range_end_rtl,
+            skip_band_borders = ptb.skip_band_borders,
         })
     end
 

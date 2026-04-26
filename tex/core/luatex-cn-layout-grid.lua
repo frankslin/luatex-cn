@@ -1136,6 +1136,32 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
             -- pages, those cell positions are different (or empty) so applying
             -- the same map would draw spurious vertical lines at wrong places.
             local pg_cell_borders = (pg == start_page) and cell_col_borders_map or nil
+
+            -- For overflow pages in parallel mode (n_bands > 1): some bands may
+            -- have already finished on earlier pages. Mark those empty bands
+            -- so border renderer skips drawing column lines / band dividers
+            -- through them, leaving only the bands with actual content.
+            local pg_band_col_borders = band_column_borders
+            local pg_skip_band_borders = nil
+            if pg > start_page and ctx.n_bands and ctx.n_bands > 1 then
+                pg_band_col_borders = {}
+                if band_column_borders then
+                    for k, v in pairs(band_column_borders) do
+                        pg_band_col_borders[k] = v
+                    end
+                end
+                pg_skip_band_borders = {}
+                for band = 0, ctx.n_bands - 1 do
+                    local mx = band_max_page[band] or start_page
+                    if mx < pg then
+                        pg_band_col_borders[band] = false
+                        pg_skip_band_borders[band] = true
+                    end
+                end
+                if not next(pg_band_col_borders) then pg_band_col_borders = nil end
+                if not next(pg_skip_band_borders) then pg_skip_band_borders = nil end
+            end
+
             ctx.page_table_bands[pg] = {
                 n_bands = ctx.n_bands,
                 band_heights_sp = ctx.band_heights_sp,
@@ -1145,8 +1171,9 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 actual_band_cols = actual_band_cols,
                 column_border = tparams.column_border,
                 band_border = tparams.band_border,
-                band_column_borders = band_column_borders,
+                band_column_borders = pg_band_col_borders,
                 cell_column_borders = pg_cell_borders,
+                skip_band_borders = pg_skip_band_borders,
                 column_fill = tparams_cf,
                 -- Debug: save cell column groups for cell coordinate debug
                 col_groups = all_col_groups,
