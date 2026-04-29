@@ -210,6 +210,19 @@ function sidenote.render(head, layout_map, params, context, engine_ctx, page_idx
         sn_head = linemark_mod.render_line_marks(sn_head, linemark_entries, lm_ctx)
     end
 
+    -- Build background fill rectangles per cell (issue #93).
+    -- When a sidenote has background_color set, fill the cell behind each glyph
+    -- so the column borders (界行) under the sidenote are visually masked.
+    -- Special value "page" / "inherit" / 继承 / 页面 inherits the page background
+    -- color, which makes the sidenote blend into the page.
+    if sn_head then
+        local bg_literals = sidenote._build_bg_literals(sidenote_for_page,
+            engine_ctx, p_total_cols)
+        for i = #bg_literals, 1, -1 do
+            sn_head = D.insert_before(sn_head, sn_head, bg_literals[i])
+        end
+    end
+
     -- Append sidenote sublist to end of main list (so sidenotes render on top of borders)
     if sn_head then
         -- ALWAYS wrap sidenote content with q/Q to prevent color leakage
@@ -530,6 +543,66 @@ local function find_sidenote_anchors(head, layout_map, on_sidenote_found)
         end
         t = D.getnext(t)
     end
+end
+
+--- Resolve sidenote background color value to RGB string.
+-- Returns nil for empty/none values. Special tokens "page", "inherit",
+-- "继承", "页面", "頁面" inherit from the page background color (white when
+-- no page background is configured, since that's what the page actually shows).
+local function resolve_bg_color(bg_color)
+    if not bg_color then return nil end
+    local s = tostring(bg_color)
+    if s == "" or s == "none" then return nil end
+    local low_s = s:lower():gsub("^%s*(.-)%s*$", "%1")
+    if low_s == "page" or low_s == "inherit"
+        or low_s == "继承" or low_s == "页面" or low_s == "頁面" then
+        local tex_bg = utils.get_tex_tl("l__luatexcn_page_background_color_tl")
+        return utils.normalize_rgb(tex_bg) or "1.0000 1.0000 1.0000"
+    end
+    return utils.normalize_rgb(s)
+end
+
+--- Build PDF fill-rectangle literal nodes behind sidenote glyphs (issue #93).
+-- Each placed sidenote node that consumes a row gets a small rectangle of
+-- the same height as its cell, centered on the column boundary. The
+-- rectangle masks any column borders (界行) underneath the sidenote text.
+function sidenote._build_bg_literals(sidenote_for_page, engine_ctx, p_total_cols)
+    local literals = {}
+    if not sidenote_for_page or #sidenote_for_page == 0 then return literals end
+
+    local sp_to_bp = utils.sp_to_bp
+    for _, item in ipairs(sidenote_for_page) do
+        local id = D.getid(item.node)
+        local consumes_row = (id == constants.GLYPH or id == constants.HLIST
+            or id == constants.VLIST or id == constants.RULE)
+        if consumes_row then
+            local bg_rgb = resolve_bg_color(
+                item.metadata and item.metadata.background_color)
+            if bg_rgb then
+                local cell_h = item.cell_height or engine_ctx.g_height
+                local font_size_sp = (item.metadata
+                    and tonumber(item.metadata.font_size)) or cell_h
+                local rtl_col = p_total_cols - 1 - item.col
+                local boundary_x = text_position.get_column_x(rtl_col + 1,
+                    engine_ctx.col_geom)
+                    + (engine_ctx.half_thickness or 0)
+                    + (engine_ctx.shift_x or 0)
+                local meta_xshift = safe_resolve(
+                    item.metadata and item.metadata.xshift,
+                    engine_ctx.g_height)
+                local center_x = boundary_x + meta_xshift
+                local x_left = center_x - font_size_sp / 2
+                local y_top = -item.y_sp - (engine_ctx.shift_y or 0)
+                local literal_str = utils.create_fill_rect_literal(bg_rgb,
+                    x_left * sp_to_bp,
+                    y_top * sp_to_bp,
+                    font_size_sp * sp_to_bp,
+                    -cell_h * sp_to_bp)
+                literals[#literals + 1] = utils.create_pdf_literal(literal_str)
+            end
+        end
+    end
+    return literals
 end
 
 -- Expose internal functions for unit testing

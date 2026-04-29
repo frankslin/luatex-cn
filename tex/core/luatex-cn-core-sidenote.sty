@@ -29,6 +29,7 @@
 \tl_new:N \l__luatexcn_sidenote_color_tl
 \tl_new:N \l__luatexcn_sidenote_padding_top_tl
 \tl_new:N \l__luatexcn_sidenote_padding_bottom_tl
+\tl_new:N \l__luatexcn_sidenote_bgcolor_tl
 
 \keys_define:nn { luatexcn / sidenote }
   {
@@ -48,6 +49,8 @@
     column-padding-top .initial:n = 0pt,
     column-padding-bottom .tl_set:N = \l__luatexcn_sidenote_padding_bottom_tl,
     column-padding-bottom .initial:n = 0pt,
+    background-color .tl_set:N = \l__luatexcn_sidenote_bgcolor_tl,
+    background-color .initial:n = ,
     % Forward unknown keys: try settings first, then style
     unknown .code:n =
       {
@@ -121,6 +124,7 @@
           padding_bottom = vertical_constants.to_dimen([=[\luaescapestring{\tl_use:N \l__luatexcn_sidenote_padding_bottom_tl}]=]) ~ or ~ 0,
           font_color = [=[\luaescapestring{\tl_use:N \l__luatexcn_sidenote_color_tl}]=],
           font_size = [=[\luaescapestring{\dim_use:N \l_tmpa_dim}]=],
+          background_color = [=[\luaescapestring{\tl_use:N \l__luatexcn_sidenote_bgcolor_tl}]=],
           punct_mode = [=[\luaescapestring{\tl_use:N \l__luatexcn_settings_punct_mode_tl}]=],
           punct_style = [=[\luaescapestring{\tl_use:N \l__luatexcn_settings_punct_style_tl}]=]
         })}%
@@ -157,6 +161,8 @@
     颜色 .tl_set:N = \l__luatexcn_sidenote_color_tl,
     栏上填充 .tl_set:N = \l__luatexcn_sidenote_padding_top_tl,
     栏下填充 .tl_set:N = \l__luatexcn_sidenote_padding_bottom_tl,
+    底色 .tl_set:N = \l__luatexcn_sidenote_bgcolor_tl,
+    背景色 .tl_set:N = \l__luatexcn_sidenote_bgcolor_tl,
     % 繁体（与简体不同形的）
     側批 .bool_set:N = \l__luatexcn_sidenote_on_bool,
     側批 .default:n = true,
@@ -164,6 +170,7 @@
     橫移 .tl_set:N = \l__luatexcn_sidenote_xshift_tl,
     字號 .tl_set:N = \l__luatexcn_sidenote_font_size_tl,
     顏色 .tl_set:N = \l__luatexcn_sidenote_color_tl,
+    背景色 .tl_set:N = \l__luatexcn_sidenote_bgcolor_tl,
   }
 \ExplSyntaxOff
 
