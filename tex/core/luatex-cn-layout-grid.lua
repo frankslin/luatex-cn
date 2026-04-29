@@ -1081,12 +1081,19 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
             and _G.content.table_params.column_fill or nil
         local is_fill_page = (tparams_cf == "page" or tparams_cf == "half-page")
 
-        -- Calculate actual table width from col_groups (max across all bands)
+        -- Calculate actual table width from col_groups (max across all bands).
+        -- For column_fill=page, the start-page width differs from continuation
+        -- pages (start spans from table_orig_start_col to page right edge;
+        -- continuations start at col 0 and span the full page), so we record
+        -- both and pick per-page below.
         local all_col_groups = (_G.content and _G.content.table_col_groups) or {}
         local actual_band_cols = 0
+        local actual_band_cols_overflow = nil
         if is_fill_page then
-            -- column_fill=page: table spans all remaining columns
-            actual_band_cols = ctx.band_cols_per_band
+            -- column_fill=page: start-page width is the original (saved before
+            -- any mid-band page wrap reset ctx.band_cols_per_band to p_cols).
+            actual_band_cols = ctx.table_orig_band_cols or ctx.band_cols_per_band
+            actual_band_cols_overflow = p_cols
         else
             for _, band_groups in pairs(all_col_groups) do
                 local band_cols = 0
@@ -1136,13 +1143,18 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
             -- pages, those cell positions are different (or empty) so applying
             -- the same map would draw spurious vertical lines at wrong places.
             local pg_cell_borders = (pg == start_page) and cell_col_borders_map or nil
-            ctx.page_table_bands[pg] = {
+            -- Multi-table per page: store as array, not single object,
+            -- so multiple tables on the same page each retain their band info.
+            local pg_band_cols = (pg == start_page) and actual_band_cols
+                or (actual_band_cols_overflow or actual_band_cols)
+            ctx.page_table_bands[pg] = ctx.page_table_bands[pg] or {}
+            table.insert(ctx.page_table_bands[pg], {
                 n_bands = ctx.n_bands,
                 band_heights_sp = ctx.band_heights_sp,
                 band_y_offsets_sp = ctx.band_y_offsets_sp,
                 band_gap_sp = ctx.band_gap_sp or 0,
                 table_start_col = (pg == start_page) and (ctx.table_orig_start_col or 0) or 0,
-                actual_band_cols = actual_band_cols,
+                actual_band_cols = pg_band_cols,
                 column_border = tparams.column_border,
                 band_border = tparams.band_border,
                 band_column_borders = band_column_borders,
@@ -1151,7 +1163,7 @@ local function handle_penalty_breaks(p_val, ctx, flush_buffer_fn, p_cols, interv
                 -- Debug: save cell column groups for cell coordinate debug
                 col_groups = all_col_groups,
                 n_columns = ctx.band_cols_per_band,
-            }
+            })
             end
         end
 

@@ -555,15 +555,18 @@ local function render_single_page(p_head, p_max_col, p, layout_map, params, ctx,
     end
 
     -- Debug: draw table cell coordinates if debug is enabled
-    local ptb = _G.content and _G.content.page_table_bands and _G.content.page_table_bands[p]
-    if ptb and debug.is_enabled("table") then
-        p_head = debug.draw_table_cells_debug(p_head, ptb, {
-            total_cols = p_total_cols,
-            shift_x = shift_x,
-            shift_y = ctx.shift_y,
-            half_thickness = ctx.half_thickness,
-            col_geom = ctx.col_geom,
-        })
+    -- page_table_bands[p] is an array of per-table band info (one entry per table on this page)
+    local ptbs = _G.content and _G.content.page_table_bands and _G.content.page_table_bands[p]
+    if ptbs and debug.is_enabled("table") then
+        for _, ptb in ipairs(ptbs) do
+            p_head = debug.draw_table_cells_debug(p_head, ptb, {
+                total_cols = p_total_cols,
+                shift_x = shift_x,
+                shift_y = ctx.shift_y,
+                half_thickness = ctx.half_thickness,
+                col_geom = ctx.col_geom,
+            })
+        end
     end
 
     -- Debug: draw layout debug overlay (TextBox blocks, floating boxes, sidenotes)

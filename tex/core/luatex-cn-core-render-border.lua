@@ -785,9 +785,62 @@ local function render_borders(p_head, params)
     -- 1. Draw column borders (inner borders between columns)
     -- Table-level column_border applies to all bands as default;
     -- per-band column_border (via \栏格式) overrides the table default.
-    local ptb = params.page_table_bands
+    --
+    -- Multi-table per page: page_table_bands is an array of per-table band info.
+    -- For backwards compatibility, accept a single object and wrap it.
+    local ptbs = params.page_table_bands
+    if ptbs and ptbs.n_bands and not ptbs[1] then
+        ptbs = { ptbs }
+    end
+    ptbs = ptbs or {}
+
+    -- Pre-compute which tables need segmented column borders (band-aware draw),
+    -- and which page columns they own. Tables without band_column_borders or
+    -- column_border falsy are drawn full-height in the non-table pass.
+    local segmented_tables = {}
+    local table_owned_cols = {}
+    for _, ptb in ipairs(ptbs) do
+        if ptb.n_bands and ptb.n_bands > 1 then
+            local effective_borders = {}
+            if ptb.column_border ~= nil then
+                for band = 0, ptb.n_bands - 1 do
+                    effective_borders[band] = ptb.column_border
+                end
+            end
+            if ptb.band_column_borders then
+                for band_idx, val in pairs(ptb.band_column_borders) do
+                    effective_borders[band_idx] = val
+                end
+            end
+            if next(effective_borders) then
+                segmented_tables[#segmented_tables + 1] = {
+                    ptb = ptb,
+                    effective_borders = effective_borders,
+                }
+                local start_col = ptb.table_start_col or 0
+                local end_col = start_col + (ptb.actual_band_cols or 0) - 1
+                for col = start_col, end_col do
+                    table_owned_cols[col] = true
+                end
+            end
+        end
+    end
+
     if draw_col_border and p_total_cols > 0 then
-        local col_border_params = {
+        -- Base skip set: banxin + no_silk regions are always skipped
+        local base_skip = {}
+        for k, v in pairs(params.reserved_cols or {}) do base_skip[k] = v end
+        local no_silk_cols = params.no_silk_cols
+        if no_silk_cols then
+            for k, v in pairs(no_silk_cols) do base_skip[k] = v end
+        end
+
+        -- Step A: full-height column borders for all non-table columns.
+        -- Skip columns owned by segmented tables (drawn in Step B).
+        local non_table_skip = {}
+        for k, v in pairs(base_skip) do non_table_skip[k] = v end
+        for k in pairs(table_owned_cols) do non_table_skip[k] = true end
+        p_head = draw_column_borders(p_head, {
             total_cols = p_total_cols,
             grid_width = grid_width,
             col_geom = col_geom,
@@ -796,46 +849,47 @@ local function render_borders(p_head, params)
             shift_x = params.shift_x,
             outer_shift = params.outer_shift,
             border_rgb_str = params.b_rgb_str,
-            banxin_cols = params.reserved_cols,
+            banxin_cols = non_table_skip,
             col_min_y_sp = params.col_min_y_sp,
             c_padding_top = params.c_padding_top,
-        }
-        -- Apply table-level column_border as default for all bands,
-        -- then per-band overrides take precedence.
-        if ptb and ptb.n_bands and ptb.n_bands > 1 then
-            local effective_borders = {}
-            -- Start with table-level default
-            if ptb.column_border ~= nil then
-                for band = 0, ptb.n_bands - 1 do
-                    effective_borders[band] = ptb.column_border
+        })
+
+        -- Step B: per-table segmented column borders restricted to that
+        -- table's column range (skip everything outside).
+        for _, t in ipairs(segmented_tables) do
+            local ptb = t.ptb
+            local start_col = ptb.table_start_col or 0
+            local end_col = start_col + (ptb.actual_band_cols or 0) - 1
+            local table_skip = {}
+            for k, v in pairs(base_skip) do table_skip[k] = v end
+            for col = 0, p_total_cols - 1 do
+                if col < start_col or col > end_col then
+                    table_skip[col] = true
                 end
             end
-            -- Per-band overrides
-            if ptb.band_column_borders then
-                for band_idx, val in pairs(ptb.band_column_borders) do
-                    effective_borders[band_idx] = val
-                end
-            end
-            if next(effective_borders) then
-                col_border_params.band_column_borders = effective_borders
-                col_border_params.n_bands = ptb.n_bands
-                col_border_params.band_heights_sp = ptb.band_heights_sp
-                col_border_params.band_y_offsets_sp = ptb.band_y_offsets_sp
-                col_border_params.table_start_col = ptb.table_start_col
-                col_border_params.actual_band_cols = ptb.actual_band_cols
-                col_border_params.cell_column_borders = ptb.cell_column_borders
-                col_border_params.col_groups = ptb.col_groups
-            end
+            p_head = draw_column_borders(p_head, {
+                total_cols = p_total_cols,
+                grid_width = grid_width,
+                col_geom = col_geom,
+                content_dim_h = content_dim_h,
+                border_thickness = border_thickness,
+                shift_x = params.shift_x,
+                outer_shift = params.outer_shift,
+                border_rgb_str = params.b_rgb_str,
+                banxin_cols = table_skip,
+                col_min_y_sp = params.col_min_y_sp,
+                c_padding_top = params.c_padding_top,
+                band_column_borders = t.effective_borders,
+                n_bands = ptb.n_bands,
+                band_heights_sp = ptb.band_heights_sp,
+                band_y_offsets_sp = ptb.band_y_offsets_sp,
+                table_start_col = ptb.table_start_col,
+                actual_band_cols = ptb.actual_band_cols,
+                cell_column_borders = ptb.cell_column_borders,
+                col_groups = ptb.col_groups,
+            })
         end
-        -- Partial silk suppression: merge no_silk_cols into banxin_cols for skipping
-        local no_silk_cols = params.no_silk_cols
-        if no_silk_cols then
-            local merged_skip = {}
-            for k, v in pairs(params.reserved_cols or {}) do merged_skip[k] = v end
-            for k, v in pairs(no_silk_cols) do merged_skip[k] = v end
-            col_border_params.banxin_cols = merged_skip
-        end
-        p_head = draw_column_borders(p_head, col_border_params)
+
         -- Draw content frame for the no-silk region
         if no_silk_cols then
             p_head = draw_content_frame(p_head, {
@@ -885,54 +939,56 @@ local function render_borders(p_head, params)
     end
 
     -- 1c. Inline table band divider lines (per-page table band info)
-    -- (ptb was defined above for per-band column border support)
-    -- Table-level overrides: ptb.band_border > content-level draw_bnd_border
-    local table_band_border = draw_bnd_border
-    if ptb and ptb.band_border ~= nil then table_band_border = ptb.band_border end
-    if table_band_border and ptb and ptb.n_bands and ptb.n_bands > 1 then
-        -- table_start_col is a logical column index (0 = rightmost).
-        -- draw_band_borders uses RTL column indices (0 = leftmost).
-        -- Convert logical range to RTL range.
-        local table_start_logical = ptb.table_start_col or 0
-        local table_cols = ptb.actual_band_cols or p_total_cols
+    -- Iterate each table on the page; table-level band_border overrides
+    -- content-level draw_bnd_border per table.
+    for _, ptb in ipairs(ptbs) do
+        local table_band_border = draw_bnd_border
+        if ptb.band_border ~= nil then table_band_border = ptb.band_border end
+        if table_band_border and ptb.n_bands and ptb.n_bands > 1 then
+            -- table_start_col is a logical column index (0 = rightmost).
+            -- draw_band_borders uses RTL column indices (0 = leftmost).
+            -- Convert logical range to RTL range.
+            local table_start_logical = ptb.table_start_col or 0
+            local table_cols = ptb.actual_band_cols or p_total_cols
 
-        -- Find end logical column by stepping through content columns,
-        -- skipping banxin (reserved) columns in between.
-        local end_logical = table_start_logical
-        local placed = 0
-        local iv = col_geom.interval or 0
-        while placed < table_cols do
-            local is_bx = (iv > 0) and ((end_logical % (iv + 1)) == iv)
-            if not is_bx then
-                placed = placed + 1
+            -- Find end logical column by stepping through content columns,
+            -- skipping banxin (reserved) columns in between.
+            local end_logical = table_start_logical
+            local placed = 0
+            local iv = col_geom.interval or 0
+            while placed < table_cols do
+                local is_bx = (iv > 0) and ((end_logical % (iv + 1)) == iv)
+                if not is_bx then
+                    placed = placed + 1
+                end
+                if placed < table_cols then
+                    end_logical = end_logical + 1
+                end
             end
-            if placed < table_cols then
-                end_logical = end_logical + 1
-            end
+
+            -- Convert logical columns to RTL columns
+            local range_start_rtl = p_total_cols - 1 - end_logical
+            local range_end_rtl = p_total_cols - 1 - table_start_logical
+            if range_start_rtl < 0 then range_start_rtl = 0 end
+            if range_end_rtl >= p_total_cols then range_end_rtl = p_total_cols - 1 end
+
+            p_head = draw_band_borders(p_head, {
+                n_bands = ptb.n_bands,
+                band_heights_sp = ptb.band_heights_sp,
+                band_y_offsets_sp = ptb.band_y_offsets_sp,
+                inner_width = inner_width,
+                border_thickness = border_thickness,
+                border_rgb_str = params.b_rgb_str,
+                shift_x = params.shift_x,
+                outer_shift = params.outer_shift,
+                c_padding_top = params.c_padding_top,
+                band_gap_sp = ptb.band_gap_sp,
+                col_geom = col_geom,
+                total_cols = p_total_cols,
+                col_range_start = range_start_rtl,
+                col_range_end = range_end_rtl,
+            })
         end
-
-        -- Convert logical columns to RTL columns
-        local range_start_rtl = p_total_cols - 1 - end_logical
-        local range_end_rtl = p_total_cols - 1 - table_start_logical
-        if range_start_rtl < 0 then range_start_rtl = 0 end
-        if range_end_rtl >= p_total_cols then range_end_rtl = p_total_cols - 1 end
-
-        p_head = draw_band_borders(p_head, {
-            n_bands = ptb.n_bands,
-            band_heights_sp = ptb.band_heights_sp,
-            band_y_offsets_sp = ptb.band_y_offsets_sp,
-            inner_width = inner_width,
-            border_thickness = border_thickness,
-            border_rgb_str = params.b_rgb_str,
-            shift_x = params.shift_x,
-            outer_shift = params.outer_shift,
-            c_padding_top = params.c_padding_top,
-            band_gap_sp = ptb.band_gap_sp,
-            col_geom = col_geom,
-            total_cols = p_total_cols,
-            col_range_start = range_start_rtl,
-            col_range_end = range_end_rtl,
-        })
     end
 
     -- 2. Draw outer border
