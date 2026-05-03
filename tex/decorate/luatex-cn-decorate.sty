@@ -194,6 +194,171 @@
 \NewCommandCopy{\著重號設置}{\emphasisMarkSetup}
 
 % ============================================================================
+% FaSheng (发圈/圈发) - 平上去入声调圈点
+% Reference: 宋岳珂《九经三传沿革例》"音有平上去入之分，则随圈发"
+% Convention: 平=左下 上=左上 去=右上 入=右下
+% Sign convention from decorate.lua: xshift>0 = visual LEFT (toward next column),
+%                                     yshift>0 = visual DOWN (toward next char).
+% Syntax:
+%   \发圈[平]{字}                   bare tone shorthand
+%   \发圈[声=去, 颜色=red]{字}     explicit keys
+%   \发圈批{平上去入}{春夏秋冬}     parallel batch
+% ============================================================================
+\tl_new:N \l__luatexcn_fasheng_tone_tl
+\tl_new:N \l__luatexcn_fasheng_color_tl
+\tl_new:N \l__luatexcn_fasheng_char_tl
+\tl_new:N \l__luatexcn_fasheng_scale_tl
+\tl_new:N \l__luatexcn_fasheng_offset_tl
+\tl_new:N \l__luatexcn_fasheng_xshift_tl
+\tl_new:N \l__luatexcn_fasheng_yshift_tl
+
+\keys_define:nn { luatexcn / fasheng }
+  {
+    tone .tl_set:N = \l__luatexcn_fasheng_tone_tl,
+    tone .initial:n = ping,
+    color .tl_set:N = \l__luatexcn_fasheng_color_tl,
+    color .initial:n = black,
+    char .tl_set:N = \l__luatexcn_fasheng_char_tl,
+    char .initial:n = ○,
+    scale .tl_set:N = \l__luatexcn_fasheng_scale_tl,
+    scale .initial:n = 0.3,
+    offset .tl_set:N = \l__luatexcn_fasheng_offset_tl,
+    offset .initial:n = 0.45em,
+    % CJK aliases for value keys
+    声 .tl_set:N = \l__luatexcn_fasheng_tone_tl,
+    聲 .tl_set:N = \l__luatexcn_fasheng_tone_tl,
+    颜色 .tl_set:N = \l__luatexcn_fasheng_color_tl,
+    顏色 .tl_set:N = \l__luatexcn_fasheng_color_tl,
+    字符 .tl_set:N = \l__luatexcn_fasheng_char_tl,
+    缩放 .tl_set:N = \l__luatexcn_fasheng_scale_tl,
+    縮放 .tl_set:N = \l__luatexcn_fasheng_scale_tl,
+    偏移 .tl_set:N = \l__luatexcn_fasheng_offset_tl,
+    % Bare tone shortcuts (no value): \发圈[平]{字}
+    平 .meta:n = { tone = ping },
+    上 .meta:n = { tone = shang },
+    去 .meta:n = { tone = qu },
+    入 .meta:n = { tone = ru },
+    平声 .meta:n = { tone = ping },
+    上声 .meta:n = { tone = shang },
+    去声 .meta:n = { tone = qu },
+    入声 .meta:n = { tone = ru },
+    平聲 .meta:n = { tone = ping },
+    上聲 .meta:n = { tone = shang },
+    去聲 .meta:n = { tone = qu },
+    入聲 .meta:n = { tone = ru },
+    ping .meta:n = { tone = ping },
+    shang .meta:n = { tone = shang },
+    qu .meta:n = { tone = qu },
+    ru .meta:n = { tone = ru },
+  }
+
+% Resolve xshift/yshift from tone using current offset value
+\cs_new_protected:Npn \__luatexcn_fasheng_resolve:
+  {
+    \str_case:VnF \l__luatexcn_fasheng_tone_tl
+      {
+        { ping }
+          {
+            \tl_set:Nx \l__luatexcn_fasheng_xshift_tl
+              { \l__luatexcn_fasheng_offset_tl }
+            \tl_set:Nx \l__luatexcn_fasheng_yshift_tl
+              { \l__luatexcn_fasheng_offset_tl }
+          }
+        { shang }
+          {
+            \tl_set:Nx \l__luatexcn_fasheng_xshift_tl
+              { \l__luatexcn_fasheng_offset_tl }
+            \tl_set:Nx \l__luatexcn_fasheng_yshift_tl
+              { -\l__luatexcn_fasheng_offset_tl }
+          }
+        { qu }
+          {
+            \tl_set:Nx \l__luatexcn_fasheng_xshift_tl
+              { -\l__luatexcn_fasheng_offset_tl }
+            \tl_set:Nx \l__luatexcn_fasheng_yshift_tl
+              { -\l__luatexcn_fasheng_offset_tl }
+          }
+        { ru }
+          {
+            \tl_set:Nx \l__luatexcn_fasheng_xshift_tl
+              { -\l__luatexcn_fasheng_offset_tl }
+            \tl_set:Nx \l__luatexcn_fasheng_yshift_tl
+              { \l__luatexcn_fasheng_offset_tl }
+          }
+      }
+      {
+        \tl_set:Nx \l__luatexcn_fasheng_xshift_tl
+          { \l__luatexcn_fasheng_offset_tl }
+        \tl_set:Nx \l__luatexcn_fasheng_yshift_tl
+          { \l__luatexcn_fasheng_offset_tl }
+      }
+  }
+
+\NewDocumentCommand{\fashengSetup}{ m }
+  {
+    \keys_set:nn { luatexcn / fasheng } { #1 }
+  }
+
+\NewDocumentCommand{\faSheng}{ O{} m }
+  {
+    \group_begin:
+      \keys_set:nn { luatexcn / fasheng } { #1 }
+      \__luatexcn_fasheng_resolve:
+      \decorate
+        [
+          char = \l__luatexcn_fasheng_char_tl,
+          color = \l__luatexcn_fasheng_color_tl,
+          scale = \l__luatexcn_fasheng_scale_tl,
+          xshift = \l__luatexcn_fasheng_xshift_tl,
+          yshift = \l__luatexcn_fasheng_yshift_tl,
+        ]
+        { #2 }
+    \group_end:
+  }
+
+% Batch: \fashengBatch{tones}{chars} — parallel pairwise application
+\cs_new_protected:Npn \__luatexcn_fasheng_pair:nn #1 #2
+  {
+    \tl_if_blank:nF { #2 } { \faSheng [ #1 ] { #2 } }
+  }
+
+\NewDocumentCommand{\fashengBatch}{ m m }
+  {
+    \group_begin:
+      \int_zero:N \l_tmpa_int
+      \tl_map_inline:nn { #1 }
+        {
+          \int_incr:N \l_tmpa_int
+          \exp_args:Nne \__luatexcn_fasheng_pair:nn
+            { ##1 }
+            { \tl_item:nn {#2} { \int_use:N \l_tmpa_int } }
+        }
+    \group_end:
+  }
+
+% CJK aliases
+\NewCommandCopy{\发圈}{\faSheng}
+\NewCommandCopy{\發圈}{\faSheng}
+\NewCommandCopy{\圈发}{\faSheng}
+\NewCommandCopy{\圈發}{\faSheng}
+\NewCommandCopy{\发圈设置}{\fashengSetup}
+\NewCommandCopy{\發圈設置}{\fashengSetup}
+\NewCommandCopy{\发圈批}{\fashengBatch}
+\NewCommandCopy{\發圈批}{\fashengBatch}
+
+% Per-tone shortcut commands.
+% User options come first in the keylist; tone is enforced LAST so it can't be
+% overridden — \平声[声=去]{字} stays 平.
+\NewDocumentCommand{\平声}{ O{} m } { \faSheng [ #1 , tone = ping  ] { #2 } }
+\NewDocumentCommand{\上声}{ O{} m } { \faSheng [ #1 , tone = shang ] { #2 } }
+\NewDocumentCommand{\去声}{ O{} m } { \faSheng [ #1 , tone = qu    ] { #2 } }
+\NewDocumentCommand{\入声}{ O{} m } { \faSheng [ #1 , tone = ru    ] { #2 } }
+\NewCommandCopy{\平聲}{\平声}
+\NewCommandCopy{\上聲}{\上声}
+\NewCommandCopy{\去聲}{\去声}
+\NewCommandCopy{\入聲}{\入声}
+
+% ============================================================================
 % Underline / WavyUnderline - Now provided by luatex-cn-linemark.sty
 % The old glyph-based implementation has been replaced with PDF line drawing.
 % Commands \Underline, \WavyUnderline, \下划线, \波浪线 etc. are defined there.
