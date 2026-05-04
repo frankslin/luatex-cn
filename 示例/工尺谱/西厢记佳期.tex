@@ -14,13 +14,16 @@
 %   - 板眼标记: 用红色 \音[板/眼] 近似手写本红色小圆点
 %   - 调名 (仙吕调) 应在题名下方小字, 此处用 \调名注 近似
 %
-\documentclass{ltc-guji}
+\documentclass[红楼梦甲戌本]{ltc-guji}
 
-\setmainfont{TW-Kai}  % 使用更完整的繁体楷书字库以容纳生僻字
+\usepackage{fontspec}
+\setmainfont{TW-Kai}
 
-\title{西厢记}
+\开启句读模式
 
-\chapter{佳期·临镜序}
+\title{西厢記}
+
+\chapter{佳期·臨鏡序}
 
 \newcommand{\调名注}[1]{{\small #1}}
 \newcommand{\句读}[1]{{\small #1}}
