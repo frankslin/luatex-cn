@@ -246,9 +246,11 @@ constants.register_decorate = register_decorate
 --- Process a captured side content box.
 -- Examines the vbox: if it contains a TextBox result (has ATTR_TEXTBOX_WIDTH),
 -- copies the box for direct positioning during render.
--- Otherwise extracts unicode codepoints for character-by-character rendering.
+-- Otherwise builds a unit list — each "real" glyph starts a new unit; glyphs
+-- carrying ATTR_DECORATE_ID are decoration markers (e.g., 板眼 dots from
+-- \音[板]{尺}) and attach to the most recent unit's `decorations` list.
 -- @param box_num (number) TeX box register number
--- @return (table|nil) { chars = {...} } or { box = <node> }
+-- @return (table|nil) { units = {...} } or { box = <node> }
 local function process_side_box(box_num)
     if not box_num or box_num < 0 then return nil end
     local box = tex.box[box_num]
@@ -271,26 +273,45 @@ local function process_side_box(box_num)
         n = D.getnext(n)
     end
 
-    -- Plain text: extract unicode codepoints from glyph nodes
-    local chars = {}
-    local function extract(nd)
+    -- Plain text: build units. Real glyphs start a unit; decoration markers
+    -- (ATTR_DECORATE_ID set, registry entry not "side_text") attach to current.
+    local units = {}
+    local current = nil
+    local function walk(nd)
         while nd do
             local id = D.getid(nd)
             if id == constants.GLYPH then
                 local char = D.getfield(nd, "char")
-                if char and char > 0 then
-                    table.insert(chars, char)
+                local decor_id = constants.ATTR_DECORATE_ID and
+                    D.get_attribute(nd, constants.ATTR_DECORATE_ID)
+                if decor_id and decor_id > 0 then
+                    local r = _G.decorate_registry and _G.decorate_registry[decor_id]
+                    if current and r and r.type ~= "side_text" then
+                        table.insert(current.decorations, {
+                            char = r.char,
+                            xshift = r.xshift,
+                            yshift = r.yshift,
+                            scale = r.scale,
+                            color = r.color,
+                            font_size = r.font_size,
+                        })
+                    end
+                else
+                    if char and char > 0 then
+                        current = { char = char, decorations = {} }
+                        table.insert(units, current)
+                    end
                 end
             elseif id == constants.HLIST or id == constants.VLIST then
                 local child = D.getfield(nd, "head")
-                if child then extract(child) end
+                if child then walk(child) end
             end
             nd = D.getnext(nd)
         end
     end
-    extract(head)
-    if #chars == 0 then return nil end
-    return { chars = chars }
+    walk(head)
+    if #units == 0 then return nil end
+    return { units = units }
 end
 
 --- Register a side text decoration (small text on left/right of main character)
@@ -311,9 +332,9 @@ local function register_side_text(right_box_num, left_box_num, scale, color_str,
 
     local reg = {
         type = "side_text",
-        right_chars = right_data and right_data.chars,
+        right_units = right_data and right_data.units,
         right_box = right_data and right_data.box,
-        left_chars = left_data and left_data.chars,
+        left_units = left_data and left_data.units,
         left_box = left_data and left_data.box,
         scale = tonumber(scale) or 0.5,
         color = color_str or "black",

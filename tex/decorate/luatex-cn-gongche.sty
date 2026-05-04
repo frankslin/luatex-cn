@@ -80,6 +80,112 @@
 \NewCommandCopy{\工尺设置}{\gongcheSetup}
 \NewCommandCopy{\工尺設置}{\gongcheSetup}
 
+% ============================================================================
+% \音[<板眼>]{字} (Level 2) — gongche character + per-unit decoration
+% Syntax:
+%   \音{尺}                        no marker (same as bare char)
+%   \音[板]{尺}                    rhythm strong-beat dot (red 。)
+%   \音[眼]{尺}                    rhythm weak-beat dot (red 、)
+%   \音[头板]{尺}                  larger × marker
+%   \音[底板]{尺}                  └ marker
+%   \音[板, 颜色=blue]{尺}         preset + override
+%   \音[字符=●, 缩放=0.3, 颜色=red]{尺}   fully manual
+%
+% Sign convention: marker xshift>0 = visual LEFT (toward main char),
+%                  yshift>0 = visual DOWN. Resolved at register time
+%                  against base font; the side-text renderer multiplies by
+%                  the gongche scale so 0.5em behaves "relative to the 工尺
+%                  char's visual size".
+% ============================================================================
+\tl_new:N \l__luatexcn_yin_marker_char_tl
+\tl_new:N \l__luatexcn_yin_marker_xshift_tl
+\tl_new:N \l__luatexcn_yin_marker_yshift_tl
+\tl_new:N \l__luatexcn_yin_marker_scale_tl
+\tl_new:N \l__luatexcn_yin_marker_color_tl
+
+\keys_define:nn { luatexcn / yin }
+  {
+    % Manual override keys
+    marker-char .tl_set:N = \l__luatexcn_yin_marker_char_tl,
+    marker-xshift .tl_set:N = \l__luatexcn_yin_marker_xshift_tl,
+    marker-yshift .tl_set:N = \l__luatexcn_yin_marker_yshift_tl,
+    marker-scale .tl_set:N = \l__luatexcn_yin_marker_scale_tl,
+    marker-color .tl_set:N = \l__luatexcn_yin_marker_color_tl,
+    % CJK aliases for manual override
+    字符 .tl_set:N = \l__luatexcn_yin_marker_char_tl,
+    横偏 .tl_set:N = \l__luatexcn_yin_marker_xshift_tl,
+    橫偏 .tl_set:N = \l__luatexcn_yin_marker_xshift_tl,
+    纵偏 .tl_set:N = \l__luatexcn_yin_marker_yshift_tl,
+    縱偏 .tl_set:N = \l__luatexcn_yin_marker_yshift_tl,
+    缩放 .tl_set:N = \l__luatexcn_yin_marker_scale_tl,
+    縮放 .tl_set:N = \l__luatexcn_yin_marker_scale_tl,
+    颜色 .tl_set:N = \l__luatexcn_yin_marker_color_tl,
+    顏色 .tl_set:N = \l__luatexcn_yin_marker_color_tl,
+    % Banyan presets — bare key shortcuts via .meta:n
+    板 .meta:n =
+      {
+        marker-char = 。, marker-xshift = -0.5em, marker-yshift = 0em,
+        marker-scale = 0.35, marker-color = red
+      },
+    眼 .meta:n =
+      {
+        marker-char = 、, marker-xshift = -0.5em, marker-yshift = 0em,
+        marker-scale = 0.35, marker-color = red
+      },
+    头板 .meta:n =
+      {
+        marker-char = ×, marker-xshift = -0.5em, marker-yshift = 0em,
+        marker-scale = 0.45, marker-color = red
+      },
+    頭板 .meta:n =
+      {
+        marker-char = ×, marker-xshift = -0.5em, marker-yshift = 0em,
+        marker-scale = 0.45, marker-color = red
+      },
+    底板 .meta:n =
+      {
+        marker-char = └, marker-xshift = -0.5em, marker-yshift = 0em,
+        marker-scale = 0.45, marker-color = red
+      },
+    底叮 .meta:n =
+      {
+        marker-char = ⌐, marker-xshift = -0.5em, marker-yshift = 0em,
+        marker-scale = 0.45, marker-color = red
+      },
+  }
+
+\NewDocumentCommand{\Yin}{ O{} m }
+  {
+    \group_begin:
+      \tl_clear:N \l__luatexcn_yin_marker_char_tl
+      \tl_set:Nn \l__luatexcn_yin_marker_xshift_tl { -0.5em }
+      \tl_set:Nn \l__luatexcn_yin_marker_yshift_tl { 0em }
+      \tl_set:Nn \l__luatexcn_yin_marker_scale_tl  { 0.35 }
+      \tl_set:Nn \l__luatexcn_yin_marker_color_tl  { red }
+      \keys_set:nn { luatexcn / yin } { #1 }
+      #2
+      \tl_if_empty:NF \l__luatexcn_yin_marker_char_tl
+        {
+          \lua_now:e
+            {
+              local~constants~=~require('core.luatex-cn-constants')
+              constants.register_decorate(
+                "\luaescapestring{\l__luatexcn_yin_marker_char_tl}",
+                "\luaescapestring{\l__luatexcn_yin_marker_xshift_tl}",
+                "\luaescapestring{\l__luatexcn_yin_marker_yshift_tl}",
+                nil,
+                "\luaescapestring{\l__luatexcn_yin_marker_color_tl}",
+                font.current(),
+                "\luaescapestring{\l__luatexcn_yin_marker_scale_tl}"
+              )
+            }
+          \box0\scan_stop:
+        }
+    \group_end:
+  }
+
+\NewCommandCopy{\音}{\Yin}
+
 \ExplSyntaxOff%
 %
 \endinput%

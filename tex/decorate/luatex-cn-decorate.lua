@@ -296,16 +296,58 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
     -- Column visual center
     local col_center_x = base_x + col_width / 2
 
-    -- Render a vertical column of characters on one side
-    local function render_side(chars, side)
-        if not chars or #chars == 0 then return end
+    -- Render a glyph at given (x_sp, y_sp) baseline, with given scale and color.
+    -- Returns nothing; mutates p_head.
+    local function emit_glyph(char_code, x_sp, y_sp, g_scale, rgb_str)
+        local gw, gh, gd = 0, 0, 0
+        if f_data and f_data.characters and f_data.characters[char_code] then
+            local c = f_data.characters[char_code]
+            gw = c.width or 0
+            gh = c.height or 0
+            gd = c.depth or 0
+        end
 
+        local g = D.new(constants.GLYPH)
+        D.setfield(g, "char", char_code)
+        D.setfield(g, "font", font_id)
+        D.setfield(g, "lang", 0)
+        D.setfield(g, "width", gw)
+        D.setfield(g, "height", gh)
+        D.setfield(g, "depth", gd)
+        D.setfield(g, "xoffset", 0)
+        D.setfield(g, "yoffset", 0)
+
+        local cp = string.format("%s %s",
+            utils.create_color_literal(rgb_str, false),
+            utils.create_color_literal(rgb_str, true))
+        local matrix_part = string.format("%.4f 0 0 %.4f %.4f %.4f cm",
+            g_scale, g_scale, x_sp * utils.sp_to_bp, y_sp * utils.sp_to_bp)
+        local n_start = utils.create_pdf_literal("q " .. cp .. " " .. matrix_part)
+        local n_end = utils.create_pdf_literal(utils.create_graphics_state_end())
+
+        p_head = D.insert_before(p_head, curr, n_start)
+        D.insert_after(p_head, n_start, g)
+        local k = D.new(constants.KERN)
+        D.setfield(k, "kern", -gw)
+        D.insert_after(p_head, g, k)
+        D.insert_after(p_head, k, n_end)
+
+        return gw, gh, gd
+    end
+
+    -- Render a vertical column of units on one side. Each unit is
+    -- {char=<codepoint>, decorations={...}}. Decorations attach to the unit
+    -- (e.g., 板眼 dot on a 工尺 char) and are positioned relative to the
+    -- unit's center using deco.xshift/yshift (sign convention identical to
+    -- main-text \decorate: xshift>0 visual LEFT, yshift>0 visual DOWN).
+    local function render_side_units(units, side)
+        if not units or #units == 0 then return end
+
+        local n_units = #units
         local char_step = math.floor(base_size * scale)
-        local total_h = #chars * char_step
+        local total_h = n_units * char_step
 
         -- X target: position side text just outside the main character.
-        -- Distance from column center = main char half-width + side text half-width + gap.
-        -- This adapts to the main character's actual font size (base_size).
         local main_half = base_size / 2
         local side_half = math.floor(base_size * scale / 2)
         local gap = math.floor(base_size * 0.05)
@@ -316,52 +358,62 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
             target_x = col_center_x - main_half - side_half - gap + offset_sp
         end
 
-        for i, char_code in ipairs(chars) do
-            local gw, gh, gd = 0, 0, 0
+        for i, unit in ipairs(units) do
+            local char_code = unit.char
+
+            -- Vertical: stack units centered on main character (i=1 topmost).
+            local char_top_y = main_center_y + total_h / 2 - (i - 1) * char_step
+
+            -- Position the gongche/yin char itself
+            local gw_u = 0
+            if f_data and f_data.characters and f_data.characters[char_code] then
+                gw_u = f_data.characters[char_code].width or 0
+            end
+            local v_center = text_position.get_visual_center(char_code, font_id) or (gw_u / 2)
+            local unit_glyph_x = target_x - v_center * scale
+            local _, gh, gd = 0, 0, 0
             if f_data and f_data.characters and f_data.characters[char_code] then
                 local c = f_data.characters[char_code]
-                gw = c.width or 0
                 gh = c.height or 0
                 gd = c.depth or 0
             end
-
-            -- Create glyph node
-            local g = D.new(constants.GLYPH)
-            D.setfield(g, "char", char_code)
-            D.setfield(g, "font", font_id)
-            D.setfield(g, "lang", 0)
-            D.setfield(g, "width", gw)
-            D.setfield(g, "height", gh)
-            D.setfield(g, "depth", gd)
-            D.setfield(g, "xoffset", 0)
-            D.setfield(g, "yoffset", 0)
-
-            -- Horizontal: center glyph's visual center at target_x
-            local v_center = text_position.get_visual_center(char_code, font_id) or (gw / 2)
-            local glyph_x = target_x - v_center * scale
-
-            -- Vertical: stack chars centered on main character
-            -- i=1 is topmost, i=#chars is bottommost
-            local char_top_y = main_center_y + total_h / 2 - (i - 1) * char_step
             local ink_center_y = ((gh - gd) / 2) * scale
-            local glyph_y = char_top_y - char_step / 2 - ink_center_y
+            local unit_glyph_y = char_top_y - char_step / 2 - ink_center_y
+            emit_glyph(char_code, unit_glyph_x, unit_glyph_y, scale, draw_rgb)
 
-            local x_bp = glyph_x * utils.sp_to_bp
-            local y_bp = glyph_y * utils.sp_to_bp
-
-            -- Render with PDF scale matrix
-            local matrix_part = string.format("%.4f 0 0 %.4f %.4f %.4f cm",
-                scale, scale, x_bp, y_bp)
-            local n_start = utils.create_pdf_literal("q " .. color_part .. " " .. matrix_part)
-            local n_end = utils.create_pdf_literal(utils.create_graphics_state_end())
-
-            p_head = D.insert_before(p_head, curr, n_start)
-            D.insert_after(p_head, n_start, g)
-
-            local k = D.new(constants.KERN)
-            D.setfield(k, "kern", -gw)
-            D.insert_after(p_head, g, k)
-            D.insert_after(p_head, k, n_end)
+            -- Per-unit decorations (e.g., \音[板]{尺} -> red beat dot)
+            if unit.decorations and #unit.decorations > 0 then
+                local unit_center_x = target_x
+                local unit_center_y = char_top_y - char_step / 2
+                for _, deco in ipairs(unit.decorations) do
+                    local d_char = deco.char
+                    if d_char and d_char > 0 then
+                        -- xshift/yshift may be raw sp, em-tables {value,unit}, or strings;
+                        -- resolve against base font size first, then multiply by `scale`
+                        -- so 0.45em behaves relative to the gongche char's visual size,
+                        -- not the full-size lyric char.
+                        local raw_dx = constants.resolve_dimen(deco.xshift, base_size) or 0
+                        local raw_dy = constants.resolve_dimen(deco.yshift, base_size) or 0
+                        local dx_sp = raw_dx * scale
+                        local dy_sp = raw_dy * scale
+                        local d_scale = scale * (tonumber(deco.scale) or 1)
+                        local dgw, dgh, dgd = 0, 0, 0
+                        if f_data and f_data.characters and f_data.characters[d_char] then
+                            local c = f_data.characters[d_char]
+                            dgw = c.width or 0
+                            dgh = c.height or 0
+                            dgd = c.depth or 0
+                        end
+                        local dv_center = text_position.get_visual_center(d_char, font_id) or (dgw / 2)
+                        local d_target_x = unit_center_x - dx_sp
+                        local d_glyph_x = d_target_x - dv_center * d_scale
+                        local d_ink_center = ((dgh - dgd) / 2) * d_scale
+                        local d_glyph_y = unit_center_y - dy_sp - d_ink_center
+                        local d_rgb = (deco.color and color_map[deco.color]) or deco.color or "0 0 0"
+                        emit_glyph(d_char, d_glyph_x, d_glyph_y, d_scale, d_rgb)
+                    end
+                end
+            end
         end
     end
 
@@ -415,25 +467,25 @@ function decorate.handle_side_text_node(curr, p_head, pos, params, ctx, reg_id)
         D.insert_after(p_head, k_post, q_pop)
     end
 
-    -- Dispatch: TextBox (box path) or plain text (char-by-char path)
+    -- Dispatch: TextBox (box path) or unit list (char-by-char with optional decorations)
     if reg.right_box then
         render_side_box(reg.right_box, "right")
-    elseif reg.right_chars then
-        render_side(reg.right_chars, "right")
+    elseif reg.right_units then
+        render_side_units(reg.right_units, "right")
     end
 
     if reg.left_box then
         render_side_box(reg.left_box, "left")
-    elseif reg.left_chars then
-        render_side(reg.left_chars, "left")
+    elseif reg.left_units then
+        render_side_units(reg.left_units, "left")
     end
 
-    local rc = reg.right_chars and #reg.right_chars or 0
-    local lc = reg.left_chars and #reg.left_chars or 0
+    local ru = reg.right_units and #reg.right_units or 0
+    local lu = reg.left_units and #reg.left_units or 0
     local rb = reg.right_box and 1 or 0
     local lb = reg.left_box and 1 or 0
-    dbg.log(string.format("side_text [c:%d, y_sp:%.0f] scale=%.2f chars(r=%d,l=%d) box(r=%d,l=%d)",
-        pos.col, pos.y_sp or 0, scale, rc, lc, rb, lb))
+    dbg.log(string.format("side_text [c:%d, y_sp:%.0f] scale=%.2f units(r=%d,l=%d) box(r=%d,l=%d)",
+        pos.col, pos.y_sp or 0, scale, ru, lu, rb, lb))
 
     return p_head
 end
