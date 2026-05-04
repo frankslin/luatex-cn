@@ -280,6 +280,31 @@
 
 \NewCommandCopy{\拖音}{\Drag}
 
+% ============================================================================
+% 句读 / 宫调 — 小字注释 (sentence/rhyme markers, tune annotations)
+%
+% 在工尺谱中常需要标注:
+%   - 句 (sentence end), 韵 (rhyme) — 短小句读符号
+%   - 宫调名 (仙吕调/南吕调/...), 别名 (一名XX) — 标题旁的小字注
+%
+% 这些都是约半个主字大小的灰度文字, 与正文同流但视觉上区分.
+% \句读字{X} 是底层命令; \句 \韵 \宫调 是语义糖.
+% ============================================================================
+\NewDocumentCommand{\句读字}{ m }
+  {
+    {\small #1}
+  }
+
+\NewDocumentCommand{\句}{} { \句读字{句} }
+\NewDocumentCommand{\韵}{} { \句读字{韻} }
+\NewDocumentCommand{\韻}{} { \句读字{韻} }
+
+\NewDocumentCommand{\宫调}{ m } { \句读字{#1} }
+\NewDocumentCommand{\宮調}{ m } { \句读字{#1} }
+\NewDocumentCommand{\曲牌}{ m } { \句读字{#1} }
+\NewDocumentCommand{\调名注}{ m } { \句读字{#1} }
+\NewDocumentCommand{\調名注}{ m } { \句读字{#1} }
+
 \ExplSyntaxOff%
 %
 \endinput%
