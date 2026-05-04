@@ -1,0 +1,85 @@
+% Copyright 2026 Open-Guji (https://github.com/open-guji)
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+%
+%     http://www.apache.org/licenses/LICENSE-2.0
+%
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License.
+% luatex-cn-gongche.sty
+% 工尺谱 (Gongche notation) — 主字 + 右侧工尺音字
+%
+% Level 1 (current): plain string of gongche characters on the right side.
+%                    Pure wrapper around \SideText, no lua changes.
+% Level 2 (planned): \音[板]{尺} — per-unit decorations (banyan/octave).
+% Level 3 (planned): octave/extension/style presets.
+%
+\RequirePackage{expl3}
+\RequirePackage{xparse}
+\ProvidesExplPackage {decorate/luatex-cn-gongche} {2026/04/25} {0.3.7} {Gongche Notation Support}
+
+% ============================================================================
+% Key-Value Parameters
+% ============================================================================
+\tl_new:N \l__luatexcn_gongche_scale_tl
+\tl_new:N \l__luatexcn_gongche_color_tl
+\tl_new:N \l__luatexcn_gongche_offset_tl
+
+\keys_define:nn { luatexcn / gongche }
+  {
+    scale .tl_set:N = \l__luatexcn_gongche_scale_tl,
+    scale .initial:n = 0.5,
+    color .tl_set:N = \l__luatexcn_gongche_color_tl,
+    color .initial:n = black,
+    offset .tl_set:N = \l__luatexcn_gongche_offset_tl,
+    offset .initial:n = 0pt,
+    % CJK aliases
+    缩放 .tl_set:N = \l__luatexcn_gongche_scale_tl,
+    縮放 .tl_set:N = \l__luatexcn_gongche_scale_tl,
+    颜色 .tl_set:N = \l__luatexcn_gongche_color_tl,
+    顏色 .tl_set:N = \l__luatexcn_gongche_color_tl,
+    偏移 .tl_set:N = \l__luatexcn_gongche_offset_tl,
+  }
+
+\NewDocumentCommand{\gongcheSetup}{ m }
+  {
+    \keys_set:nn { luatexcn / gongche } { #1 }
+  }
+
+% ============================================================================
+% \GongChe (Level 1) — main char + right-side gongche string
+% Syntax:
+%   \工尺{主字}{工尺字串}                    basic
+%   \工尺[颜色=red, 缩放=0.4]{主字}{尺工六}   per-call options
+% Currently delegates to \SideText (右侧旁注). Level 2 will replace the
+% right-content path with a unit-list data model that supports per-音 板眼.
+% ============================================================================
+\NewDocumentCommand{\GongChe}{ O{} m m }
+  {
+    \group_begin:
+      \keys_set:nn { luatexcn / gongche } { #1 }
+      % Push gongche-specific defaults into the sidetext namespace within
+      % this group. Outer \sideTextSetup remains unchanged after group ends.
+      \keys_set:nn { luatexcn / sidetext }
+        {
+          scale = \l__luatexcn_gongche_scale_tl,
+          color = \l__luatexcn_gongche_color_tl,
+          offset = \l__luatexcn_gongche_offset_tl,
+        }
+      \SideText { #2 } { #3 }
+    \group_end:
+  }
+
+% CJK aliases
+\NewCommandCopy{\工尺}{\GongChe}
+\NewCommandCopy{\工尺设置}{\gongcheSetup}
+\NewCommandCopy{\工尺設置}{\gongcheSetup}
+
+\ExplSyntaxOff%
+%
+\endinput%
