@@ -262,6 +262,24 @@
 
 \NewCommandCopy{\音}{\Yin}
 
+% ============================================================================
+% \拖音[<rhythm>] — duration extension stroke (filler unit)
+% Uses 丨 (U+4E28 CJK STROKE) as the gongche char of a continuation unit.
+% Combines naturally with rhythm slots so each beat in a held note can be
+% marked appropriately.
+%
+% Example — 4-beat 尺 (attack on board, then 3 continuation beats):
+%   \工尺{春}{\音[板]{尺}\拖音[眼]\拖音[板]\拖音[眼]}
+%
+% Bare \拖音 = no rhythm marker (just the stroke).
+% ============================================================================
+\NewDocumentCommand{\Drag}{ O{} }
+  {
+    \Yin [ #1 ] { 丨 }
+  }
+
+\NewCommandCopy{\拖音}{\Drag}
+
 \ExplSyntaxOff%
 %
 \endinput%
