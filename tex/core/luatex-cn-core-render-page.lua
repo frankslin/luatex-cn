@@ -331,13 +331,20 @@ local function render_single_page(p_head, p_max_col, p, layout_map, params, ctx,
     if draw_column_border then
         local style_registry = package.loaded['util.luatex-cn-style-registry']
         if style_registry then
+            -- Per-column silk classification:
+            --   col_has_no_silk[col] = true  → first node carries column_border=false (\插图页 marker)
+            --   col_has_silk[col]    = true  → any glyph in this column lacks the no-silk style
+            -- A column is "silk" if it carries real text content not under \插图页 scope.
+            -- Floating-textbox anchors (whatsit) are not real text and don't promote silk.
             local col_has_no_silk = {}
+            local col_has_silk = {}
             local col_seen = {}
             local scan_t = p_head
             while scan_t do
                 local pos = layout_map[scan_t]
                 if pos then
                     local col = pos.col
+                    -- First-node-per-column: check for no-silk marker
                     if not col_seen[col] then
                         col_seen[col] = true
                         local sid = D.get_attribute(scan_t, constants.ATTR_STYLE_REG_ID)
@@ -347,7 +354,20 @@ local function render_single_page(p_head, p_max_col, p, layout_map, params, ctx,
                                 col_has_no_silk[col] = true
                             end
                         end
-                        -- No sid or style without column_border=false → default (has silk)
+                    end
+                    -- Real glyph that isn't under \插图页: this column has actual text content.
+                    if D.getid(scan_t) == constants.GLYPH then
+                        local sid = D.get_attribute(scan_t, constants.ATTR_STYLE_REG_ID)
+                        local under_no_silk = false
+                        if sid then
+                            local style = style_registry.get(sid)
+                            if style and style.column_border == false then
+                                under_no_silk = true
+                            end
+                        end
+                        if not under_no_silk then
+                            col_has_silk[col] = true
+                        end
                     end
                 end
                 scan_t = D.getnext(scan_t)
@@ -358,17 +378,29 @@ local function render_single_page(p_head, p_max_col, p, layout_map, params, ctx,
             --   banxin     = col interval
             --   right half = cols interval+1..2*interval
             -- If any column in a half has column_border=false, the whole half is suppressed.
+            -- Additionally: if no column on the page has real silk content (i.e. the page
+            -- is purely \插图页 markers + floating textboxes + empty cells), promote
+            -- suppression to the entire page so the other half (where the marker could
+            -- not land due to layout collapsing) is also borderless. This covers the
+            -- "every half has \插图页 but layout couldn't separate them" case without
+            -- breaking the legitimate "half illustration + half text" layout.
             if next(col_has_no_silk) then
                 local interval = ctx.interval or 0
+                local left_no_silk = false
+                local right_no_silk = false
                 if interval > 0 then
-                    local left_no_silk = false
-                    local right_no_silk = false
                     for col in pairs(col_has_no_silk) do
                         if col < interval then
                             left_no_silk = true
                         elseif col > interval then
                             right_no_silk = true
                         end
+                    end
+                    -- If no real silk content exists anywhere on the page, both halves
+                    -- are conceptually under \插图页 — extend suppression to both halves.
+                    if not next(col_has_silk) then
+                        left_no_silk = true
+                        right_no_silk = true
                     end
                     -- Rebuild no_silk set with full half-page ranges
                     col_has_no_silk = {}
