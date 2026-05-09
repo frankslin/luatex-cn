@@ -138,7 +138,7 @@ test_utils.run_test("place_individual_sidenote: reverse flow goes to previous co
     }
 
     local tracker = sidenote._internal.create_gap_tracker()
-    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker, nil)
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
 
     test_utils.assert_not_nil(result, "returns placed nodes")
 
@@ -187,7 +187,7 @@ test_utils.run_test("place_individual_sidenote: wraps to next column at row 0", 
     }
 
     local tracker = sidenote._internal.create_gap_tracker()
-    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker, nil)
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
 
     test_utils.assert_not_nil(result, "returns placed nodes")
     test_utils.assert_eq(#result, 8, "all 8 glyphs placed")
@@ -235,7 +235,7 @@ test_utils.run_test("place_individual_sidenote: anchor at column bottom flows to
     }
 
     local tracker = sidenote._internal.create_gap_tracker()
-    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker, nil)
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
 
     test_utils.assert_eq(#result, 1, "single glyph placed")
     test_utils.assert_eq(result[1].col, 2, "flows to next column instead of riding bottom")
@@ -266,7 +266,7 @@ test_utils.run_test("place_individual_sidenote: normal placement without wrap", 
     }
 
     local tracker = sidenote._internal.create_gap_tracker()
-    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker, nil)
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
 
     test_utils.assert_eq(#result, 1, "single glyph placed")
     test_utils.assert_eq(result[1].col, 1)
@@ -366,16 +366,15 @@ test_utils.run_test("place_individual_sidenote: wraps to taitou column at aligne
         page = 0, col = 1, y_sp = 8 * gh, indent = 0,
     }
 
+    -- Column 2 has taitou=2 (min row = -2)
     local params = {
         page_columns = 13, line_limit = 10,
         grid_height = gh, banxin_on = false,
+        col_min_row = { [0] = { [2] = -2 } },
     }
 
-    -- Column 2 has taitou=2 (min row = -2)
-    local col_min_row = { [0] = { [2] = -2 } }
-
     local tracker = sidenote._internal.create_gap_tracker()
-    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker, col_min_row)
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
 
     test_utils.assert_not_nil(result, "returns placed nodes")
     test_utils.assert_eq(result[1].col, 1, "first glyph in anchor column")
@@ -390,6 +389,107 @@ test_utils.run_test("place_individual_sidenote: wraps to taitou column at aligne
     end
     test_utils.assert_not_nil(first_wrapped, "some glyphs wrapped to column 2")
     test_utils.assert_eq(first_wrapped.y_sp / gh, -2, "wrapped starts at taitou row -2")
+end)
+
+test_utils.run_test("place_individual_sidenote: reverse flow clamps at page 0 col 0", function()
+    -- Anchor at (page=0, col=0) with extreme negative yshift would walk past
+    -- the page boundary. The loop must clamp to (0, 0, row 0) and not go
+    -- negative or place at an invalid column.
+    local glyph = D.new(constants.GLYPH)
+    glyph.char = 97
+
+    local registry_item = {
+        head = node.direct.tonode(glyph),
+        metadata = { yshift = { unit = "em", value = -50 } },
+    }
+
+    local last_node_pos = {
+        page = 0, col = 0, y_sp = 0, indent = 0,
+    }
+
+    local params = {
+        page_columns = 13, line_limit = 10,
+        grid_height = gh, banxin_on = false,
+    }
+
+    local tracker = sidenote._internal.create_gap_tracker()
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
+
+    test_utils.assert_not_nil(result, "returns placed nodes (no infinite loop)")
+    test_utils.assert_eq(result[1].page, 0, "clamps to page 0")
+    test_utils.assert_eq(result[1].col, 0, "clamps to column 0")
+    test_utils.assert_true(result[1].y_sp >= 0, "row clamps to >= 0 at page boundary")
+end)
+
+test_utils.run_test("place_individual_sidenote: reverse flow crosses page boundary", function()
+    -- Anchor at (page=1, col=0) with yshift -3em should walk back to the
+    -- last column of page 0, starting at row line_limit + (-3) = 7.
+    local glyph = D.new(constants.GLYPH)
+    glyph.char = 97
+
+    local registry_item = {
+        head = node.direct.tonode(glyph),
+        metadata = { yshift = { unit = "em", value = -3 } },
+    }
+
+    local last_node_pos = {
+        page = 1, col = 0, y_sp = 0, indent = 0,
+    }
+
+    local params = {
+        page_columns = 13, line_limit = 10,
+        grid_height = gh, banxin_on = false,
+    }
+
+    local tracker = sidenote._internal.create_gap_tracker()
+    local result = sidenote._internal.place_individual_sidenote(1, registry_item, last_node_pos, params, tracker)
+
+    test_utils.assert_not_nil(result, "returns placed nodes")
+    test_utils.assert_eq(result[1].page, 0, "wraps back to previous page")
+    test_utils.assert_eq(result[1].col, 12, "lands on previous page's last column (p_cols-1)")
+    test_utils.assert_eq(result[1].y_sp / gh, 7, "starts at line_limit + (-3) = 7")
+end)
+
+-- ============================================================================
+-- wrap_to_next_column: shared helper used by overflow + bottom-anchor paths
+-- ============================================================================
+
+test_utils.run_test("wrap_to_next_column: bumps column and resets row", function()
+    local tracker = sidenote._internal.create_gap_tracker()
+    local config = {
+        p_cols = 13, line_limit = 10,
+        banxin_on = false, interval = 0,
+        tracker = tracker,
+    }
+    local np, nc, nr = sidenote._internal.wrap_to_next_column(0, 4, config)
+    test_utils.assert_eq(np, 0)
+    test_utils.assert_eq(nc, 5, "column +1")
+    test_utils.assert_eq(nr, 0, "row resets to 0 (no taitou)")
+end)
+
+test_utils.run_test("wrap_to_next_column: aligns with target taitou", function()
+    local tracker = sidenote._internal.create_gap_tracker()
+    local config = {
+        p_cols = 13, line_limit = 10,
+        banxin_on = false, interval = 0,
+        tracker = tracker,
+        col_min_row = { [0] = { [5] = -3 } },
+    }
+    local _, nc, nr = sidenote._internal.wrap_to_next_column(0, 4, config)
+    test_utils.assert_eq(nc, 5)
+    test_utils.assert_eq(nr, -3, "row aligned with column-5 taitou")
+end)
+
+test_utils.run_test("wrap_to_next_column: rolls over to next page when col >= p_cols", function()
+    local tracker = sidenote._internal.create_gap_tracker()
+    local config = {
+        p_cols = 13, line_limit = 10,
+        banxin_on = false, interval = 0,
+        tracker = tracker,
+    }
+    local np, nc = sidenote._internal.wrap_to_next_column(0, 12, config)
+    test_utils.assert_eq(np, 1, "rolled to next page")
+    test_utils.assert_eq(nc, 0, "column reset to 0")
 end)
 
 -- ============================================================================
