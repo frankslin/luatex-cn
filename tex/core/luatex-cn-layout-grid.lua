@@ -2261,6 +2261,12 @@ local function calculate_grid_positions(head, grid_height, line_limit, n_column,
             }
             apply_style_attrs(map_entry, t)
 
+            -- Floating textbox anchors carry visible content for the page;
+            -- mark page_has_content so a following \newpage isn't dropped as redundant.
+            if D.getfield(t, "user_id") == constants.FLOATING_TEXTBOX_USER_ID then
+                ctx.page_has_content = true
+            end
+
             layout_map[t] = map_entry
             t = D.getnext(t)
             if not t then break end
