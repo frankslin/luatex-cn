@@ -72,6 +72,13 @@ local translation_map = {
   ["族谱.tex"] = "zupu.tex",
   ["族谱.pdf"] = "zupu.pdf",
   ["自定义族谱.cfg"] = "custom-zupu.cfg",
+  ["工尺谱"] = "gongche",
+  ["圣世呈符.tex"] = "shengshi-chengfu.tex",
+  ["圣世呈符.pdf"] = "shengshi-chengfu.pdf",
+  ["圣世呈符-预览.png"] = "shengshi-chengfu-preview.png",
+  ["西厢记佳期.tex"] = "xixiangji-jiaqi.tex",
+  ["西厢记佳期.pdf"] = "xixiangji-jiaqi.pdf",
+  ["西厢记佳期-预览.png"] = "xixiangji-jiaqi-preview.png",
 }
 
 -- Check if string contains Chinese characters
