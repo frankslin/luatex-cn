@@ -72,3 +72,15 @@ last_conversation.md
 全书复刻/**/tex/layout_comparison_report.json
 全书复刻/**/tex/排版一致性比较报告.md
 全书复刻/**/tex/*.pdf
+
+# macOS related
+.DS_Store
+.localized
+__MACOSX/
+.AppleDouble
+.LSOverride
+Icon[]
+
+# test related
+test/regression_test/*/current
+test/regression_test/*/diff
