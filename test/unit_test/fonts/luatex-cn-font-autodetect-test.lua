@@ -6,7 +6,7 @@ local test_utils = require('test.test_utils')
 local fontdetect = require('tex.fonts.luatex-cn-font-autodetect')
 
 -- Save originals
-local org_os_type = os.type
+local org_os_name = os.name
 local org_pkg_config = package.config
 local org_io_popen = io.popen
 
@@ -14,33 +14,34 @@ local org_io_popen = io.popen
 -- detect_os
 -- ============================================================================
 
-test_utils.run_test("detect_os: Windows via os.type", function()
-    os.type = "windows"
+test_utils.run_test("detect_os: Windows via os.name", function()
+    os.name = "windows"
     test_utils.assert_eq(fontdetect.detect_os(), "windows")
-    os.type = org_os_type
+    os.name = org_os_name
 end)
 
-test_utils.run_test("detect_os: Windows via package.config", function()
-    os.type = "unix"
-    package.config = "\\\n;\n?\n!\n-"
-    test_utils.assert_eq(fontdetect.detect_os(), "windows")
-    os.type = org_os_type
-    package.config = org_pkg_config
-end)
-
-test_utils.run_test("detect_os: Mac via uname", function()
-    os.type = "unix"
-    package.config = "/\n;\n?\n!\n-"
-    io.popen = function()
-        return {
-            read = function() return "Darwin" end,
-            close = function() end
-        }
-    end
+test_utils.run_test("detect_os: Mac via os.name", function()
+    os.name = "macosx"
     test_utils.assert_eq(fontdetect.detect_os(), "mac")
-    os.type = org_os_type
-    package.config = org_pkg_config
-    io.popen = org_io_popen
+    os.name = org_os_name
+end)
+
+test_utils.run_test("detect_os: linux via os.name", function()
+    os.name = "linux"
+    test_utils.assert_eq(fontdetect.detect_os(), "linux")
+    os.name = org_os_name
+end)
+
+test_utils.run_test("detect_os: unknown", function()
+    os.name = "0xdeadbeaf"
+    test_utils.assert_eq(fontdetect.detect_os(), "common")
+    os.name = org_os_name
+end)
+
+test_utils.run_test("detect_os: nil", function()
+    os.name = nil
+    test_utils.assert_eq(fontdetect.detect_os(), "common")
+    os.name = org_os_name
 end)
 
 -- ============================================================================

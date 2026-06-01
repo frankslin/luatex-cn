@@ -126,27 +126,19 @@ fontdetect.schemes = {
     }
 }
 
+
+
 -- Detect operating system
 function fontdetect.detect_os()
-    local os_type = os.type or "unix"
+    -- see [https://texluacats.github.io/LuaTeX/globals/os/#osname] for details.
+    local os_name = os.name
 
-    -- Check if Windows
-    if os_type == "windows" or package.config:sub(1, 1) == '\\' then
-        return "windows"
-    end
-
-    -- Check if macOS (Darwin)
-    local handle = io.popen("uname -s 2>/dev/null")
-    if handle then
-        local result = handle:read("*a")
-        handle:close()
-        if result and result:match("Darwin") then
-            return "mac"
-        end
-    end
-
-    -- Assume Linux/Unix
-    return "linux"
+    if os_name == "windows" then return "windows" end
+    if os_name == "linux" then return "linux" end
+    if os_name == "macosx" then return "mac" end
+    
+    -- undetermined operating system
+    return "common"
 end
 
 -- Check if a single font name is available
