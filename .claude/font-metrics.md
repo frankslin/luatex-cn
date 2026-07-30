@@ -1,3 +1,102 @@
+# 字体清单与 Metrics 特性总结
+
+> 项目所用字体的完整清单（版本、来源、覆盖范围、授权），可复现性约定，
+> 以及不同字体在 LuaTeX 中的 metrics 表现差异与应对策略。
+> 覆盖率数据由 fontTools 对字体 cmap 实测（2026-07-30，脚本见文末）。
+
+## 0. 字体清单（按用途）
+
+### 0.1 测试基准字体：TW-Kai（全字庫正楷體）
+
+回归测试的 .tex 硬编码此字体，是项目唯一"钉死"的字体。
+
+| 项目 | 值 |
+|------|-----|
+| 文件 | `TW-Kai-98_1.ttf`（37 MB，TTF，upem 1024） |
+| 版本 | Version **11503.01**（民國 115 年 3 月 = 2026-03） |
+| 字形数 | 39,208 glyphs / 39,203 码点 |
+| 覆盖 | CJK 基本区 20,923/20,992（99.7%）、Ext-A 6,591/6,592（100%）、CJK 标点 64/64；**不含 Ext-B**（在独立文件中） |
+| 官方来源 | 数位发展部 CNS11643 全字庫，data.gov.tw 数据集 5961 |
+| 获取途径 | `scripts/download_test_fonts.sh` → GitHub 镜像 `free-fonts-npm/TW-CNS11643-Fonts` **固定 commit `de5bd2e3`**（2026-05-05 批次） |
+| SHA-256 | `c206333edcc3c8c86ee547da4c78ad1c8f7ec2670a2b550a768532258f75806a` |
+| 授权 | **双授权二选一：政府資料開放授權條款 v1 或 SIL OFL 1.1**（官方声明，可按 OFL 1.1 使用/分发/嵌入） |
+
+同家族扩展文件（当前测试未用，古籍生僻字场景可按需引入，同一镜像 commit 下载）：
+
+| 文件 | 版本 | 码点数 | 覆盖 | SHA-256 |
+|------|------|--------|------|---------|
+| `TW-Kai-Ext-B-98_1.ttf`（46 MB） | 11505.01 | 49,568 | **Ext-B 42,711/42,720（100%）**、Ext-C 98.6%、Ext-D 87.1%、Ext-E 21.9% | `562d19fde56dfa52a3fed88a53154698e1d66e4b9c0a1faa9ba4ffa98e9d7a92` |
+| `TW-Kai-Plus-98_1.ttf`（25 MB） | 11505.01 | 25,079 | 全部在 **Plane 15 PUA**（U+F0000+，24,978 字）：CNS 有码、Unicode 未收的字 | `acd099424c70c2baf3fe8d7b31abbbc6a97af76ef210e94c07eb1eb84d1c62fb` |
+
+配套 TW-Sung（正宋體）三文件同批次同授权，镜像 `Fonts_Sung/` 目录。
+
+### 0.2 CI / Linux 自动检测字体：Fandol
+
+`font-autodetect.lua` 在 Linux 上的默认族；回归基线按它渲染。CI 通过
+TeX Live 包 `fandol` 安装（**版本随 CTAN 漂移，无法锁定**——TL 生态限制）。
+
+| 项目 | 值 |
+|------|-----|
+| 文件 | FandolSong/Hei/Kai/Fang-Regular.otf（OTF/CFF，upem 1000） |
+| 版本 | Version 1.300（TL2026 实测；上游多年未更新，实际稳定） |
+| 覆盖 | 仅 **7,942/20,992（37.8%）** 基本区汉字（≈GB2312+），无 Ext-A/B。**古籍生僻字大量缺字** |
+| 授权 | OFL 1.1 |
+| 注意 | 曾因 CI 删 `ctex` 丢失其传递依赖 fandol 导致回归全挂（PR #107），装包列表现已显式声明 |
+
+### 0.3 macOS 本地开发字体（mac scheme）
+
+自动检测在 mac 上解析到系统字体（Songti SC / PingFang SC / Kaiti SC /
+STFangsong 等），随 macOS 版本漂移、**不可复现**，仅供本地预览。本机
+Songti SC 实测：version 17.0d2e3，仅 7,103 个基本区汉字（33.8%）——这
+就是 decorate/gongche/textbox 三个用例在 mac 上必然与基线有像素差异的
+根源（见 memory: regression-env-diff-tests）。
+
+### 0.4 文档/示例中出现过的第三方字体（不随项目分发）
+
+| 字体 | 授权 | 说明 |
+|------|------|------|
+| KingHwaOldSong 京華老宋体 | 作者自定义免费商用声明（**非 OFL**，约 39k 字含部分 Ext-B） | Issue #71 的 PUA 竖排补偿即为它引入 |
+| FZShuSong-Z01 方正书宋 | 商业授权（方正免费个人使用） | 仅示例提及 |
+| Noto Serif/Sans CJK | OFL 1.1 | autodetect 的 ubuntu/common 方案备选 |
+| 花園明朝 A/B | OFL 类（Hanazono 自由授权） | 文档提及，Ext-B 覆盖极好 |
+
+## 0.5 可复现性约定
+
+1. **Canonical 字体清单**：`scripts/font-manifest.json` 是机器可读的唯一
+   事实来源——每个字体的固定下载 URL（pinned commit）、SHA-256、版本、
+   授权、覆盖摘要都在这里。改字体 = 改 manifest，不改代码。
+2. **测试只认 TW-Kai**：回归 .tex 硬编码 `TW-Kai`，不依赖系统字体；
+   `regression_test.py` 自动把 `OSFONTDIR` 指向 `test/fonts/`。
+   **字体从不安装进用户系统字体库。**
+3. **下载即校验**：`python3 scripts/download_fonts.py`（或兼容入口
+   `sh scripts/download_test_fonts.sh`）按 manifest 下载并校验 SHA-256，
+   不符即报错；`--verify` 只校验、`--all` 连同 optional（Ext-B/Plus）。
+4. **CI 与本地同源**：CI 用同一脚本 + actions/cache（key 含脚本哈希）。
+5. **已知不可复现点**（按影响排序）：
+   - Fandol 经 CTAN 安装无版本锁（实际多年未变）；
+   - mac 系统字体随 OS 漂移（仅影响本地预览与 3 个已知用例的像素差异）；
+   - 若需彻底消除：让所有回归用例显式指定 TW-Kai 并重存基线（待议）。
+
+## 0.6 OFL / 开放来源替代方案评估（2026-07）
+
+结论：**TW-Kai 本身即可按 SIL OFL 1.1 使用**（官方双授权二选一），
+"换成 OFL 来源"不需要换字体，只需在文档与分发物中注明选用 OFL 1.1 并
+附授权文本。备选对比（楷体、面向古籍）：
+
+| 字体 | 授权 | 基本区 | Ext-A | Ext-B | 结论 |
+|------|------|--------|-------|-------|------|
+| **TW-Kai（现用）** | OFL 1.1（可选） | 99.7% | 100% | 100%（Ext-B 文件） | ✅ 保持现状最优 |
+| LXGW WenKai 霞鹜文楷 | OFL 1.1 | 通用规范 8,105 字为主 | 部分 | 无 | 风格佳但生僻字远不够 |
+| FandolKai | OFL 1.1 | 37.8% | 无 | 无 | 仅作 CI 缺省，不宜作基准 |
+| Noto Serif CJK | OFL 1.1 | 100% | 100% | 少量 | 宋体非楷体；Ext-B 弱 |
+| KingHwa 京華老宋体 | 自定义声明 | 高（约 39k 字） | 有 | 部分 | 非标准授权，且为宋体 |
+| 花園明朝 A+B | 自由授权 | 100% | 100% | 100% | 明朝体风格，日系笔形，不合楷书需求 |
+
+若未来需要 Ext-B 生僻字测试用例：引入 `TW-Kai-Ext-B-98_1.ttf`（下载
+脚本加一行即可，哈希见 0.1），fontspec 侧做 fallback 字体链。
+
+---
+
 # 字体 Metrics 特性总结
 
 > 不同字体在 LuaTeX 中的 metrics 表现差异，以及 luatex-cn 的应对策略。
@@ -156,3 +255,24 @@ comp_x = floor((0.5 - ratio_x) * glyph_width + 0.5)
 | PUA 码点还原 | `tex/core/luatex-cn-core-punct.lua` | L247-280 |
 | Y 轴补偿 | `tex/core/luatex-cn-core-punct.lua` | L844-856 |
 | 字体自动检测 | `tex/fonts/luatex-cn-font-autodetect.lua` | 全文 |
+
+## 8. 覆盖率复测方法（可复现）
+
+```bash
+# 依赖: pip install fonttools（或系统包）
+python3 - <<'EOF'
+from fontTools.ttLib import TTFont
+f = TTFont("test/fonts/TW-Kai-98_1.ttf", lazy=True)
+cmap = set(f.getBestCmap())
+for label, lo, hi in [("URO", 0x4E00, 0x9FFF), ("ExtA", 0x3400, 0x4DBF),
+                      ("ExtB", 0x20000, 0x2A6DF)]:
+    n = sum(1 for c in cmap if lo <= c <= hi)
+    print(label, f"{n}/{hi-lo+1}")
+EOF
+```
+
+数据来源链接：
+- 全字庫官方：https://data.gov.tw/dataset/5961 （双授权声明见页内）
+- 镜像仓库：https://github.com/free-fonts-npm/TW-CNS11643-Fonts （pinned commit 见下载脚本）
+- Fandol：https://ctan.org/pkg/fandol
+- LXGW WenKai：https://github.com/lxgw/LxgwWenKai
