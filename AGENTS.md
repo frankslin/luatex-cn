@@ -8,7 +8,7 @@
 
 - **GitHub**: https://github.com/open-guji/luatex-cn
 - **许可证**: Apache 2.0
-- **当前版本**: 0.3.6
+- **当前版本**: 0.3.8
 
 ## 核心指令
 
@@ -24,7 +24,6 @@
 |------|------|----------|
 | `ai_must_read/LEARNING.md` | 开发经验与教训（Lua/TeX 陷阱、渲染问题） | **必读** - 避免重复踩坑 |
 | `ai_must_read/design.md` | 架构设计文档 | 实现新功能前 |
-| `ai_must_read/ONGOING.md` | 正在进行的工作 | 了解当前开发状态 |
 | `ai_must_read/expl3_note.md` | expl3 语法详解（参数展开、xparse陷阱） | **遇到 expl3 问题时必读** |
 
 ## expl3 问题速查
@@ -41,9 +40,10 @@
 
 ```
 tex/
+├── ltc-guji.cls / ltc-guji-digital.cls / ltc-cn-vbook.cls / ltc-tw-vbook.cls   # 文档类
 ├── core/           # 核心渲染引擎
 │   ├── luatex-cn-core-render-page.lua   # 主渲染逻辑
-│   ├── luatex-cn-core-layout-grid.lua   # 网格布局
+│   ├── luatex-cn-layout-grid.lua        # 网格布局
 │   ├── luatex-cn-core-page.sty          # 页面设置
 │   └── luatex-cn-core-sidenote.lua      # 侧批处理
 ├── guji/           # 古籍功能
@@ -53,11 +53,14 @@ tex/
 │   └── luatex-cn-guji-yinzhang.sty      # 印章
 ├── banxin/         # 版心相关
 ├── decorate/       # 装饰元素
+├── digital/        # 数字化布局模式（ltc-guji-digital）
+├── fonts/          # 字体检测
+├── util/           # 工具函数
 ├── configs/        # 模板配置文件
 └── debug/          # 调试工具
 
 test/
-├── unit_test/        # 单元测试（24 个文件，texlua 运行）
+├── unit_test/        # 单元测试（31 个文件，texlua 运行）
 │   ├── util/         # 工具函数测试
 │   ├── core/         # 核心渲染引擎测试
 │   ├── guji/         # 古籍功能测试
@@ -67,18 +70,19 @@ test/
 │   └── debug/        # 调试模块测试
 ├── run_all.lua       # 运行全部 unit test
 ├── test_utils.lua    # 测试框架（mock + assert）
-├── regression_test/  # 视觉回归测试
-│   ├── tex/          # 测试用 .tex 文件
-│   ├── baseline/     # 基准图像
-│   └── current/      # 当前输出
+├── digital_test/     # 数字化对照测试（*-digital.tex）
+├── regression_test/  # 视觉回归测试（basic / past_issue / complete 三个套件）
+│   └── <套件>/
+│       ├── tex/      # 测试用 .tex 文件
+│       ├── baseline/ # 基准图像
+│       └── current/  # 当前输出
 └── regression_test.py
 
 AGENTS.md             # 项目指令（本文件，coding agent 自动读取）
 CLAUDE.md             # 仅含 @AGENTS.md 导入，供 Claude Code 读取
 
 .claude/
-├── skills/           # 可用技能（每个技能一个目录，含 SKILL.md）
-└── settings.json     # 权限配置
+└── skills/           # 可用技能（每个技能一个目录，含 SKILL.md）
 ```
 
 ## 常用命令
@@ -101,10 +105,10 @@ sh scripts/download_test_fonts.sh
 python3 test/regression_test.py check
 
 # 测试单个文件
-python3 test/regression_test.py check test/regression_test/tex/shiji.tex
+python3 test/regression_test.py check test/regression_test/basic/tex/guji.tex
 
 # 更新基线（确认改动正确后）
-python3 test/regression_test.py save test/regression_test/tex/shiji.tex
+python3 test/regression_test.py save test/regression_test/basic/tex/guji.tex
 ```
 
 回归测试要点：
@@ -119,11 +123,11 @@ python3 test/regression_test.py save test/regression_test/tex/shiji.tex
 
 ### 编译测试
 ```bash
-# 在 test/regression_test/tex 目录下编译
-cd test/regression_test/tex && lualatex shiji.tex
+# 在对应套件的 tex 目录下编译
+cd test/regression_test/basic/tex && lualatex guji.tex
 
 # 带调试输出
-lualatex -interaction=nonstopmode shiji.tex 2>&1 | grep -E "\[DEBUG\]|\[ERROR\]"
+lualatex -interaction=nonstopmode guji.tex 2>&1 | grep -E "\[DEBUG\]|\[ERROR\]"
 
 # 导出 layout JSON（用于 converter 验证）
 ENABLE_EXPORT=1 lualatex yourfile.tex
@@ -173,7 +177,7 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 | `regression-test` | 运行回归测试 |
 | `test-tex` | 通过回归测试框架编译并查看 TeX 文件 |
 | `summarize-experience` | 总结经验到 LEARNING.md |
-| `track-work` | 更新 ONGOING.md 工作状态 |
+| `track-work` | 更新进行中的工作状态 |
 | `update_changelog` | 更新 CHANGELOG |
 | `prepare-next-version` | 准备下一个补丁版本 |
 | `release_process` | 发布新版本流程 |
@@ -212,13 +216,6 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 5. **小步提交** - 每次只修一个问题
 6. **expl3 标准** - 所有 TeX 代码使用 expl3
 
-## 当前开发状态
-
-查看 `ai_must_read/ONGOING.md` 了解：
-- 正在进行的功能开发
-- 待修复的 bug
-- 近期计划
-
 ---
 
 # 项目记忆
@@ -228,7 +225,7 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 
 - **测试顺序**: 先 `texlua test/run_all.lua` → 再 `python3 test/regression_test.py check`
 - **改动源码时必须同步更新 unit test**（如果会影响测试结果）
-- 24 个测试文件覆盖 util/core/guji/decorate/banxin/fonts/debug 层
+- 31 个测试文件覆盖 util/core/guji/decorate/banxin/fonts/debug 层
 - Mock 基础设施在 `test/test_utils.lua`，包含 node/tex/font/texio/luatexbase/token/utf8 的 mock
 - `_internal` 表用于白盒测试（layout-grid, flatten-nodes, render-page, render-position 等模块已导出）
 - **常见坑**: `new_attribute` mock 必须返回不同 ID（用递增计数器），否则属性碰撞导致测试失败
@@ -302,7 +299,7 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 
 ### 完整示例
 
-参考文件：`test/digital_test/史记五帝-layout.tex`（完美复刻 `示例/史记五帝本纪/史记.tex`）
+参考文件：`test/digital_test/史记五帝-digital.tex`（完美复刻 `示例/史记五帝本纪/史记.tex`）
 
 ---
 
