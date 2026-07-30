@@ -640,6 +640,15 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
         end
     end
 
+    -- Textflow glyphs bypass col_buffer/flush, so the just_wrapped_column
+    -- flag (issue #54) is never cleared by them. Clear it here: content HAS
+    -- been placed in this column, otherwise the smart-break empty-column
+    -- guard later discards the pending rows and the next paragraph
+    -- overprints this column (big/small glyph overlap).
+    if #chunks > 0 and #chunks[1].nodes > 0 then
+        ctx.just_wrapped_column = false
+    end
+
     -- Place chunks into layout_map
     for i, chunk in ipairs(chunks) do
         if i > 1 then

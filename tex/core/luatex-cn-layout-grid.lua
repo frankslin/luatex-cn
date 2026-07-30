@@ -1250,7 +1250,9 @@ local function handle_penalty_node(t, ctx, grid_height, indent, interval, p_cols
                 -- clear stale textflow pending state without advancing cur_row.
                 -- Otherwise a normal flush would re-add pending rows from the
                 -- previous column and cause a double-wrap (empty column bug).
-                if ctx.cur_row == 0 and ctx.textflow_pending_row_used then
+                if ctx.cur_row == 0 and ctx.textflow_pending_row_used
+                    and ctx.just_wrapped_column then
+                    -- Truly-empty column right after a wrap: stale pending
                     ctx.textflow_pending_sub_col = nil
                     ctx.textflow_pending_row_used = nil
                 else
