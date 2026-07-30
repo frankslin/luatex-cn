@@ -385,6 +385,15 @@ def run_suite(suite_name, suite_dir, mode, file_args, jobs):
         print(f"{status:8} {name:20} (Info: {info})")
     print("=" * 40)
 
+    # Write machine-readable results for CI summary (ci_regression_summary.py).
+    # Failing page numbers are derived there from surviving diff_<stem>-N.png files.
+    if mode == "check":
+        entries = [{"name": name, "passed": success, "info": str(info)}
+                   for name, success, info in results]
+        with open(diff_dir / "results.json", "w", encoding="utf-8") as f:
+            json.dump({"suite": suite_name, "results": entries}, f,
+                      ensure_ascii=False, indent=2)
+
     # Clean up PDF dir
     for f in pdf_dir.iterdir():
         if f.is_file():
