@@ -1,0 +1,22 @@
+% 格内垂直对齐测试：墨迹不跨基线的字（一、二、三、丶等）必须与
+% 普通字共享同一基线，不得按各自墨迹框在格内浮动（见 LEARNING.md 3.6）。
+% 此文件同时被两层测试使用：
+%   1. regression_test.py —— 像素级基线对比
+%   2. geometry_test.py   —— 解析 PDF 内容流，断言每列字形基线严格等距
+\documentclass{ltc-guji}
+\setmainfont{TW-Kai}
+\关闭分页
+
+\begin{document}
+\begin{正文}
+
+一二三丶十中口木水一上下人卜一了
+
+天地玄黄一宇宙洪荒二日月盈昃三
+
+正文夹注混排一\夹注{一二三丶小字一样要对齐一二三}继续正文一
+
+丶一丶一丶一丶一丶一
+
+\end{正文}
+\end{document}

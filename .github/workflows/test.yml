@@ -116,3 +116,8 @@ jobs:
             test/regression_test/*/current/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Run geometry tests
+        # 不依赖基线图像的自校验：解析 PDF 内容流，断言每列字形基线等距
+        # （抓「一」「丶」等按墨迹框居中导致整字偏移的 bug，LEARNING.md 3.6）
+        run: python3 test/geometry_test.py
