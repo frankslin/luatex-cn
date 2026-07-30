@@ -1,4 +1,5 @@
 ---
+name: convert-to-digital
 description: 将 ltc-guji.cls 文件转换为 ltc-guji-digital 格式
 ---
 

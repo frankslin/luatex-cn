@@ -1,4 +1,5 @@
 ---
+name: refactor
 description: 清理重构代码 (Code cleanup and refactoring)
 ---
 

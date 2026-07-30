@@ -1,6 +1,6 @@
 # luatex-cn 项目上下文
 
-> Claude Code 会自动读取此文件。这是项目的核心知识库入口。
+> Coding agent 会自动读取此文件。这是项目的核心知识库入口。
 
 ## 项目概述
 
@@ -73,9 +73,11 @@ test/
 │   └── current/      # 当前输出
 └── regression_test.py
 
+AGENTS.md             # 项目指令（本文件，coding agent 自动读取）
+CLAUDE.md             # 仅含 @AGENTS.md 导入，供 Claude Code 读取
+
 .claude/
-├── CLAUDE.md         # 项目指令（本文件）
-├── commands/         # 可用技能 (skills)
+├── skills/           # 可用技能（每个技能一个目录，含 SKILL.md）
 └── settings.json     # 权限配置
 ```
 
@@ -161,14 +163,27 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 
 ## 技能列表
 
+技能定义位于 `.claude/skills/<技能名>/SKILL.md`。Claude Code 会自动发现这些技能；
+**其他 coding agent 在执行下列任务前，应先阅读对应的 SKILL.md 并遵循其中的工作流**。
+
 | 技能 | 用途 |
 |------|------|
-| `/startup` | 每次对话开始时读取上下文 |
-| `/fix-github-issue` | 修复 GitHub Issue 的完整流程 |
-| `/regression-test` | 运行回归测试 |
-| `/summarize-experience` | 总结经验到 LEARNING.md |
-| `/update_changelog` | 更新 CHANGELOG |
-| `/release_process` | 发布新版本流程 |
+| `startup` | 每次对话开始时读取上下文 |
+| `fix-github-issue` | 修复 GitHub Issue 的完整流程 |
+| `regression-test` | 运行回归测试 |
+| `test-tex` | 通过回归测试框架编译并查看 TeX 文件 |
+| `summarize-experience` | 总结经验到 LEARNING.md |
+| `track-work` | 更新 ONGOING.md 工作状态 |
+| `update_changelog` | 更新 CHANGELOG |
+| `prepare-next-version` | 准备下一个补丁版本 |
+| `release_process` | 发布新版本流程 |
+| `update_wiki` | 发布后同步更新 GitHub Wiki |
+| `refactor` | 代码清理与重构 |
+| `cloc` | 统计代码行数 |
+| `compare-layouts` | 比较 Original 与 Digital TeX 的 layout 输出 |
+| `convert-to-digital` | 将 ltc-guji.cls 文件转换为 digital 格式 |
+| `数字化一致性检查` | 检查数字化 TeX 与原始文件的一致性 |
+| `save_conversation` | 保存对话总结 |
 
 ## 开发标准
 

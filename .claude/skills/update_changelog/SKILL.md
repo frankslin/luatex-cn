@@ -1,4 +1,5 @@
 ---
+name: update_changelog
 description: 如何高效总结并更新项目的 CHANGELOG.md (How to update CHANGELOG.md)
 ---
 

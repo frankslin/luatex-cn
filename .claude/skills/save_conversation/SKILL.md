@@ -1,3 +1,8 @@
+---
+name: save_conversation
+description: 保存本次对话的关键内容总结到 .claude/last_conversation.md（用户说"结束对话"或"保存对话"时使用）
+---
+
 # 保存对话总结
 
 当用户说"结束对话"或"保存对话"时，将本次对话的关键内容保存到 `.claude/last_conversation.md`。

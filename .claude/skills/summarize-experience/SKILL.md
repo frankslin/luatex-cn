@@ -1,4 +1,5 @@
 ---
+name: summarize-experience
 description: 总结非平凡问题的解决经验并记录到 LEARNING.md
 ---
 
@@ -112,4 +113,4 @@ vim ai_must_read/LEARNING.md
 ## 相关文件
 
 - `/ai_must_read/LEARNING.md` - 经验文档
-- `.claude/commands/summarize-experience.md` - 本 skill
+- `.claude/skills/summarize-experience/SKILL.md` - 本 skill

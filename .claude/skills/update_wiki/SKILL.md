@@ -1,3 +1,8 @@
+---
+name: update_wiki
+description: 发布新版本后同步更新 GitHub Wiki 文档（必须基于源代码实际查看编写）
+---
+
 # 更新项目 Wiki
 
 每次发布新版本后，需要同步更新 GitHub Wiki 文档。

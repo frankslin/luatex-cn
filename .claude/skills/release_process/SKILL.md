@@ -1,4 +1,5 @@
 ---
+name: release_process
 description: 发布新版本的工作流 (Workflow for releasing a new version)
 ---
 

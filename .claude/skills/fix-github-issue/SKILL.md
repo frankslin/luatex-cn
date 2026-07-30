@@ -1,4 +1,5 @@
 ---
+name: fix-github-issue
 description: 修复 GitHub Issue 的完整工作流
 ---
 

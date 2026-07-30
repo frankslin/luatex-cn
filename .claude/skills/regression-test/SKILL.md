@@ -1,3 +1,8 @@
+---
+name: regression-test
+description: 运行视觉回归测试验证代码更改是否正确，支持 basic/past_issue/complete 套件及基线更新
+---
+
 # 回归测试技能
 
 运行回归测试来验证代码更改是否正确。

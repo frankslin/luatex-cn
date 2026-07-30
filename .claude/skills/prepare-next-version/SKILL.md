@@ -1,4 +1,5 @@
 ---
+name: prepare-next-version
 description: 准备下一个补丁版本 (Prepare next patch version release)
 ---
 

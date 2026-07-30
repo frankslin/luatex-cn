@@ -1,4 +1,5 @@
 ---
+name: startup
 description: 每次对话开始时必读的项目上下文文档
 ---
 
@@ -50,7 +51,7 @@ tex/
 └── banxin/      # 版心相关
 
 test/regression_test/  # 视觉回归测试
-.claude/commands/      # AI 工作流 skills
+.claude/skills/        # AI 工作流 skills
 ai_must_read/          # 开发经验文档
 ```
 

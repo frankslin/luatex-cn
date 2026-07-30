@@ -193,7 +193,7 @@ grep "匹配页数" 排版一致性比较报告.md
 ## 📚 相关文档
 
 - **核心文档**: `ai_must_read/LEARNING.md` — 开发经验与陷阱
-- **技能**: `.claude/commands/compare-layouts.md` — Claude Code 集成
+- **技能**: `.claude/skills/compare-layouts/SKILL.md` — coding agent 集成
 - **Export 模块**: `tex/core/luatex-cn-core-export.lua` — Layout JSON 导出
 - **四库全书工作流**: `全书复刻/欽定四庫全書簡明目錄/README.md`
 

@@ -1,4 +1,5 @@
 ---
+name: compare-layouts
 description: 比较 Original (ltc-guji.cls) 和 Digital (ltc-guji-digital.cls) TeX 文件的 layout 输出
 ---
 

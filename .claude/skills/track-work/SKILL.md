@@ -1,4 +1,5 @@
 ---
+name: track-work
 description: 更新进行中的工作状态 (Track ongoing work)
 ---
 
