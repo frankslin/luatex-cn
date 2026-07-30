@@ -19,6 +19,19 @@ import multiprocessing
 # Paths relative to the project root
 BASE_DIR = Path(__file__).parent.parent.resolve()
 REG_DIR = BASE_DIR / "test" / "regression_test"
+
+# 仓库内测试字体（TW-Kai 等），由 scripts/download_test_fonts.sh 下载。
+# 通过 OSFONTDIR 让 luaotfload 找到它们，无需安装到系统字体目录。
+FONTS_DIR = BASE_DIR / "test" / "fonts"
+_prev_osfontdir = os.environ.get("OSFONTDIR")
+os.environ["OSFONTDIR"] = (
+    f"{FONTS_DIR}{os.pathsep}{_prev_osfontdir}" if _prev_osfontdir else str(FONTS_DIR)
+)
+if not list(FONTS_DIR.glob("*.ttf")):
+    print(
+        f"WARNING: {FONTS_DIR} 中没有字体文件，编译可能因缺少 TW-Kai 失败。\n"
+        "请先运行: sh scripts/download_test_fonts.sh"
+    )
 DIFF_THRESHOLD = 200
 DIFF_RATIO_THRESHOLD = 0.2
 
@@ -39,6 +52,21 @@ def get_suite_dirs(suite_dir):
         suite_dir / "current",
         suite_dir / "diff",
     )
+
+
+# JSON 布局导出中的易变元数据键，比较基线时忽略（例如 source_mtime 在
+# git 检出后必然变化，与布局本身无关）。
+VOLATILE_JSON_KEYS = {"source_mtime"}
+
+
+def strip_volatile_json(data):
+    """Recursively drop volatile metadata keys before baseline comparison."""
+    if isinstance(data, dict):
+        return {k: strip_volatile_json(v) for k, v in data.items()
+                if k not in VOLATILE_JSON_KEYS}
+    if isinstance(data, list):
+        return [strip_volatile_json(v) for v in data]
+    return data
 
 
 def run_command(cmd, cwd=None, capture=True, log_list=None):
@@ -143,7 +171,7 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
                         new_data = json.load(f)
                     with open(baseline_json, 'r', encoding='utf-8') as f:
                         old_data = json.load(f)
-                    if new_data == old_data:
+                    if strip_volatile_json(new_data) == strip_volatile_json(old_data):
                         log_list.append(f"JSON baseline unchanged for {tex_file.name}")
                     else:
                         shutil.copy2(str(json_file), str(baseline_json))
@@ -224,7 +252,7 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
                     current_data = json.load(f)
                 with open(baseline_json, 'r', encoding='utf-8') as f:
                     baseline_data = json.load(f)
-                if current_data == baseline_data:
+                if strip_volatile_json(current_data) == strip_volatile_json(baseline_data):
                     log_list.append(f"JSON matches baseline for {tex_file.name}")
                 else:
                     json_ok = False

@@ -84,3 +84,6 @@ Icon[]
 # test related
 test/regression_test/*/current
 test/regression_test/*/diff
+
+# repo-local test fonts (downloaded by scripts/download_test_fonts.sh)
+test/fonts/
