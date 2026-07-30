@@ -1,0 +1,78 @@
+name: Update Wiki PDFs
+
+on:
+  workflow_dispatch:       # 仅手动触发（Actions 页面点击运行）
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: wiki-pdf
+  cancel-in-progress: true
+
+jobs:
+  build-pdf:
+    # 只在 open-guji 主仓库运行
+    if: github.repository_owner == 'open-guji'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # stamp 的 repo_commit 需要完整历史做 diff 判断
+
+      - name: Clone wiki
+        run: git clone --depth 1 https://github.com/${{ github.repository }}.wiki.git wiki-src
+
+      - name: Check whether wiki changed since last build
+        id: check
+        run: |
+          wiki_head=$(git -C wiki-src rev-parse --short HEAD)
+          last_wiki=$(python3 -c "import json;print(json.load(open('文档/wiki-pdf-stamp.json'))['wiki_commit'])" 2>/dev/null || echo none)
+          last_repo=$(python3 -c "import json;print(json.load(open('文档/wiki-pdf-stamp.json'))['repo_commit'])" 2>/dev/null || echo none)
+          echo "wiki_head=$wiki_head" >> "$GITHUB_OUTPUT"
+          # wiki 与上次构建相同、且构建脚本自那以后无改动时跳过，
+          # 避免生成纯时间戳差异的噪音 PR
+          script_same=false
+          git diff --quiet "$last_repo" HEAD -- 文档/build_wiki_pdf.py 2>/dev/null && script_same=true
+          if [ "$wiki_head" = "$last_wiki" ] && [ "$script_same" = true ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Wiki and build script unchanged ($wiki_head), skipping build."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 fonts-noto-cjk
+          pip3 install --user markdown-it-py weasyprint
+
+      - name: Build PDFs
+        if: steps.check.outputs.changed == 'true'
+        run: LUATEX_CN_WIKI_DIR="$GITHUB_WORKSPACE/wiki-src" python3 文档/build_wiki_pdf.py
+
+      - name: Create pull request with updated PDFs
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="docs/wiki-pdf-${{ steps.check.outputs.wiki_head }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add 文档/luatex-cn-wiki-zh.pdf 文档/luatex-cn-wiki-en.pdf 文档/wiki-pdf-stamp.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "docs: regenerate wiki PDFs (wiki @ ${{ steps.check.outputs.wiki_head }})"
+          git push -f origin "$branch"
+          # 已有同分支的开放 PR 时跳过创建（push 已更新其内容）
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
+            gh pr create \
+              --title "docs: 更新 Wiki PDF（wiki @ ${{ steps.check.outputs.wiki_head }}）" \
+              --body "由 wiki-pdf workflow 自动生成。wiki commit: \`${{ steps.check.outputs.wiki_head }}\`，构建信息见 \`文档/wiki-pdf-stamp.json\` 与 PDF 封面戳。"
+          fi
