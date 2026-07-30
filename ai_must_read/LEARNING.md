@@ -320,6 +320,42 @@ local scaled_font_id = font.define(...)
 tex.box[box_num] = node.copy_list(original_box)
 ```
 
+### 3.6 格内垂直居中：墨迹框 vs em 框（「一」偏上问题）
+
+**问题**：「一」「二」「丶」等字竖排渲染时明显偏上，与其他字方框不对齐。
+汉仪仿宋（FS001）下偏移约 0.18em，TW-Kai 下约 0.12em——所有字体都受影响，
+只是字形画得越高越明显。
+
+**根本原因**：
+- luaotfload node 模式下 glyph 节点的 height/depth 来自**墨迹 bbox**：
+  「一」的墨迹全在基线上方（如 y=0.353–0.481em），故 `depth=0, height=0.481em`
+- 旧代码按 `[baseline−depth, baseline+height]` 区间在格内居中，
+  基线以上、墨迹以下的空白（0–0.353em）不被计入 → 整字被抬高
+- 副作用：每个字的基线随各自 bbox 上下浮动（PDF 内容流可见基线间距抖动）
+
+**错误方案**：
+```lua
+-- ❌ 墨迹框居中：对墨迹不跨基线的字（一、丶）会整字偏移
+y = y - (cell_height + h + d) / 2 + d
+```
+
+**正确方案**：
+```lua
+-- ✅ em 框居中：用字体 ascender/descender 固定基线在格内位置
+local p = font.getfont(fid).parameters   -- ascender/descender 已按字号缩放 (sp)
+y = y - (cell_height + p.ascender + p.descender) / 2 + p.descender
+```
+
+**关键点**：
+- **标点必须保留墨迹居中**（`ATTR_PUNCT_TYPE` 有值时）：句读圈点依赖
+  墨迹居中落在格中央；旋转字形（`ATTR_VERT_ROTATE`）的旋转中心也按墨迹算
+- 字体无 `parameters.ascender/descender` 时（含 unit test mock）退回墨迹居中
+- `v_scale` 缩放 height/depth 时须同步缩放 ascender/descender
+- 验证手段：解析 PDF 内容流的 `Tm` 矩阵，修复后同列各字基线应严格等距
+
+**适用场景**：任何按格定位字形的代码（主文本 `calc_grid_position`、
+侧批 sidenote、版心 `position_glyph`），三处已统一用 `get_em_span()`。
+
 ---
 
 ## 四、 PDF 渲染问题
