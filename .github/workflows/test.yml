@@ -99,3 +99,20 @@ jobs:
 
       - name: Run regression tests
         run: python3 test/regression_test.py check
+
+      - name: Regression summary
+        # 把结果表 + 失败页差异定位写入 Actions step summary，一目了然
+        if: always()
+        run: python3 test/ci_regression_summary.py
+
+      - name: Upload regression diffs
+        # 失败时上传三联对比图（基线 | 当前·红框标注 | 差异热区）及原始 diff
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-diffs
+          path: |
+            test/regression_test/*/diff/
+            test/regression_test/*/current/
+          if-no-files-found: ignore
+          retention-days: 14
