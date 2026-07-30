@@ -896,6 +896,12 @@ function textflow.place_nodes(ctx, start_node, layout_map, params, callbacks)
     return temp_t
 end
 
+-- Export internals for white-box unit testing
+textflow._internal = {
+    place_textflow_segment = place_textflow_segment,
+    get_node_h = get_node_h,
+}
+
 -- Register module
 package.loaded['core.luatex-cn-textflow'] = textflow
 

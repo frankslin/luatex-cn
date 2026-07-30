@@ -25,6 +25,7 @@ local tests = {
     "test/unit_test/core/flatten-nodes-test.lua",
 
     -- Core layer (complex modules, smoke tests)
+    "test/unit_test/core/textflow-test.lua",
     "test/unit_test/core/layout-grid-test.lua",
     "test/unit_test/core/layout-grid-band-test.lua",
     "test/unit_test/core/render-page-test.lua",

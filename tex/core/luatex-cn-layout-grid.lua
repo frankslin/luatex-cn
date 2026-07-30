@@ -1273,6 +1273,7 @@ local function handle_penalty_node(t, ctx, grid_height, indent, interval, p_cols
         handle_penalty_breaks(p_val, ctx, flush_fn, p_cols, interval, grid_height, indent, t)
     end
 end
+_internal.handle_penalty_node = handle_penalty_node
 
 --- Get grid width for free mode column tracking
 local function get_free_mode_grid_width(params)
