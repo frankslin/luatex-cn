@@ -602,6 +602,27 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
         start_sub_col = 2
     end
 
+    -- Guard: if the current column has no room for even one textflow node,
+    -- wrap to the next column first. Otherwise process_sequence force-places
+    -- the first node (its "at least one node per chunk" anti-loop guard) and
+    -- the glyph protrudes beyond the column bottom border.
+    if ctx.auto_column_wrap ~= false and start_sub_col ~= 2 then
+        local first_h = get_node_h(node_heights, 1, gh)
+        if available_height_sp < first_h then
+            callbacks.wrap()
+            local wrap_indent = callbacks.get_indent(params.block_id, orig_base_indent, orig_first_indent)
+            if ctx.cur_row < wrap_indent then
+                ctx.cur_row = wrap_indent
+                ctx.cur_y_sp = ctx.cur_row * (params.grid_height or 655360)
+            end
+            if textflow_gh then
+                available_height_sp = ctx.col_height_sp - ctx.cur_y_sp
+            else
+                available_height_sp = (params.effective_limit - ctx.cur_row) * gh
+            end
+        end
+    end
+
     local chunks, final_sub_col, final_row_used = textflow.process_sequence(
         nodes, available_height_sp, column_height_sp,
         params.textflow_mode, auto_balance, start_sub_col, nil,
@@ -617,6 +638,15 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
         else
             forced_first_sub_col = 1  -- Started on right sub-col (default)
         end
+    end
+
+    -- Textflow glyphs bypass col_buffer/flush, so the just_wrapped_column
+    -- flag (issue #54) is never cleared by them. Clear it here: content HAS
+    -- been placed in this column, otherwise the smart-break empty-column
+    -- guard later discards the pending rows and the next paragraph
+    -- overprints this column (big/small glyph overlap).
+    if #chunks > 0 and #chunks[1].nodes > 0 then
+        ctx.just_wrapped_column = false
     end
 
     -- Place chunks into layout_map
@@ -865,6 +895,12 @@ function textflow.place_nodes(ctx, start_node, layout_map, params, callbacks)
 
     return temp_t
 end
+
+-- Export internals for white-box unit testing
+textflow._internal = {
+    place_textflow_segment = place_textflow_segment,
+    get_node_h = get_node_h,
+}
 
 -- Register module
 package.loaded['core.luatex-cn-textflow'] = textflow
