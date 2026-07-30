@@ -92,6 +92,9 @@ texlua test/unit_test/core/layout-grid-test.lua
 
 ### 回归测试（Regression Test）
 ```bash
+# 首次运行前：下载测试字体 TW-Kai 到 test/fonts/（不入库，不装系统字体）
+sh scripts/download_test_fonts.sh
+
 # 运行所有测试
 python3 test/regression_test.py check
 
@@ -101,6 +104,16 @@ python3 test/regression_test.py check test/regression_test/tex/shiji.tex
 # 更新基线（确认改动正确后）
 python3 test/regression_test.py save test/regression_test/tex/shiji.tex
 ```
+
+回归测试要点：
+
+- **测试字体**：测试 .tex 硬编码 TW-Kai 字体。`regression_test.py` 会自动把
+  `OSFONTDIR` 指向 `test/fonts/`，字体由 `scripts/download_test_fonts.sh`
+  下载（固定 mirror commit，可复现），无需安装到系统字体目录。
+- **JSON 基线**：layout JSON 与基线比较时忽略 `source_mtime` 等易变元数据
+  （git 检出会改变 mtime，与布局无关）。
+- **CI**：`.github/workflows/test.yml` 会对每个 PR 及 main/dev 的 push
+  先跑 unit test 再跑 regression test，本地通过后 CI 应当同样通过。
 
 ### 编译测试
 ```bash
