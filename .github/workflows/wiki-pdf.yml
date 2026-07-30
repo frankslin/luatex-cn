@@ -70,9 +70,13 @@ jobs:
           fi
           git commit -m "docs: regenerate wiki PDFs (wiki @ ${{ steps.check.outputs.wiki_head }})"
           git push -f origin "$branch"
-          # 已有同分支的开放 PR 时跳过创建（push 已更新其内容）
+          # 已有同分支的开放 PR 时跳过创建（push 已更新其内容）。
+          # 若仓库未开启 "Allow GitHub Actions to create and approve pull
+          # requests"，gh pr create 会被拒——此时输出手动创建链接，不算失败。
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
-            gh pr create \
+            if ! gh pr create \
               --title "docs: 更新 Wiki PDF（wiki @ ${{ steps.check.outputs.wiki_head }}）" \
-              --body "由 wiki-pdf workflow 自动生成。wiki commit: \`${{ steps.check.outputs.wiki_head }}\`，构建信息见 \`文档/wiki-pdf-stamp.json\` 与 PDF 封面戳。"
+              --body "由 wiki-pdf workflow 自动生成。wiki commit: \`${{ steps.check.outputs.wiki_head }}\`，构建信息见 \`文档/wiki-pdf-stamp.json\` 与 PDF 封面戳。"; then
+              echo "::notice title=分支已推送，需手动创建 PR::https://github.com/${{ github.repository }}/pull/new/$branch （或在仓库 Settings → Actions → General 勾选 'Allow GitHub Actions to create and approve pull requests' 后重跑）"
+            fi
           fi
