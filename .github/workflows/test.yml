@@ -47,19 +47,23 @@ jobs:
             latex-bin
             luatex
             luaotfload
+            luatexbase
             ctablestack
             fontspec
+            iftex
             geometry
             graphics
             enumitem
             environ
+            trimspaces
             eso-pic
+            xkeyval
+            etoolbox
             l3kernel
             l3packages
             showframe
             pgf
             xcolor
-            ctex
 
       - name: Install system dependencies
         run: |

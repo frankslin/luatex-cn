@@ -99,6 +99,14 @@ def compile_tex(tex_file, pdf_dir, log_list):
 
         if res.returncode != 0:
             log_list.append(f"ERROR: Compilation failed for {ex_name}")
+            # 输出 lualatex 日志尾部，方便在 CI 上直接定位错误
+            output = res.stdout or ""
+            if res.stderr:
+                output += "\n" + res.stderr
+            tail = output.strip().splitlines()[-40:]
+            log_list.append(f"--- lualatex output tail for {ex_name} ---")
+            log_list.extend(tail)
+            log_list.append("--- end of output ---")
             return False
 
     return pdf_dir / pdf_name
