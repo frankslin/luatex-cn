@@ -151,10 +151,16 @@ function sidenote.render(head, layout_map, params, context, engine_ctx, page_idx
                 + engine_ctx.half_thickness + engine_ctx.shift_x
             local final_x = boundary_x - (w / 2) + (pos.xshift or 0)
 
-            local char_total_height = h + d
             local cell_h = item.cell_height or engine_ctx.g_height
 
-            local final_y = -pos.y_sp - (cell_h + char_total_height) / 2 + d -
+            -- em 框居中（固定基线，见 render-position 的 get_em_span）；
+            -- 标点保持墨迹居中，字体无参数时同样退回墨迹居中
+            local asc, desc
+            if D.get_attribute(curr, constants.ATTR_PUNCT_TYPE) == nil then
+                asc, desc = text_position.get_em_span(D.getfield(curr, "font"))
+            end
+            if not asc then asc, desc = h, d end
+            local final_y = -pos.y_sp - (cell_h + asc + desc) / 2 + desc -
                 engine_ctx.shift_y
 
             D.setfield(curr, "xoffset", final_x)
