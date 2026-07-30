@@ -11,8 +11,12 @@ Usage:
   python3 文档/build_wiki_pdf.py
 """
 
+import json
+import os
 import re
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from markdown_it import MarkdownIt
@@ -22,8 +26,25 @@ from weasyprint import HTML
 # Configuration
 # ---------------------------------------------------------------------------
 
-WIKI_DIR = Path(__file__).resolve().parent.parent.parent / "luatex-cn.wiki"
+# Wiki checkout 位置：默认在仓库旁边，可用 LUATEX_CN_WIKI_DIR 覆盖（CI 用）
+WIKI_DIR = Path(
+    os.environ.get(
+        "LUATEX_CN_WIKI_DIR",
+        Path(__file__).resolve().parent.parent.parent / "luatex-cn.wiki",
+    )
+)
 OUT_DIR = Path(__file__).resolve().parent  # 文档/
+
+
+def git_head(repo_dir: Path) -> str:
+    """Return the short HEAD commit of a git checkout, or 'unknown'."""
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_dir, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return "unknown"
 
 # Chapter ordering – mirrors _Sidebar.md structure
 ZH_CHAPTERS = [
@@ -124,6 +145,11 @@ def convert_wiki_links(md: str, valid_slugs: set[str]) -> str:
         if slug in valid_slugs:
             return f"[{display}](#{slug})"
         return display
+
+    # 表格单元格内的 wiki 链接会把竖线转义成 \|（[[A \| B]]），
+    # 先还原为普通分隔符，否则反斜杠残留在链接文本里产生 \]，
+    # 使 markdown 链接无法闭合、整段以字面文本渲染
+    md = re.sub(r"\[\[[^\]]+?\]\]", lambda m: m.group(0).replace("\\|", "|"), md)
 
     # [[display | target]] or [[target]]
     md = re.sub(r"\[\[([^|\]]+?)(?:\s*\|\s*([^\]]+?))?\]\]", _replace, md)
@@ -257,6 +283,12 @@ hr {
     color: #666;
 }
 
+.cover p.stamp {
+    font-size: 9pt;
+    color: #999;
+    margin-top: 40pt;
+}
+
 .toc {
     page-break-after: always;
 }
@@ -330,22 +362,35 @@ def build_toc_html(chapters: list[tuple[str, str]], is_zh: bool) -> str:
 """
 
 
+def build_stamp(is_zh: bool) -> str:
+    """Generation stamp: UTC timestamp + repo/wiki commits."""
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    repo_commit = git_head(Path(__file__).resolve().parent.parent)
+    wiki_commit = git_head(WIKI_DIR)
+    if is_zh:
+        return (f"生成时间 {ts} · 仓库 {repo_commit} · wiki {wiki_commit}")
+    return f"Generated {ts} · repo {repo_commit} · wiki {wiki_commit}"
+
+
 def build_cover_html(is_zh: bool) -> str:
     """Build cover page HTML."""
+    stamp = build_stamp(is_zh)
     if is_zh:
-        return """
+        return f"""
 <div class="cover">
 <h1>LuaTeX-CN 文档</h1>
 <p>— 高质量古籍排版宏包 —</p>
 <p>从 GitHub Wiki 自动生成</p>
+<p class="stamp">{stamp}</p>
 </div>
 """
     else:
-        return """
+        return f"""
 <div class="cover">
 <h1>LuaTeX-CN Documentation</h1>
 <p>— High-Quality Classical Chinese Typesetting —</p>
 <p>Auto-generated from GitHub Wiki</p>
+<p class="stamp">{stamp}</p>
 </div>
 """
 
@@ -419,6 +464,18 @@ def main():
 
     print("Building English PDF ...")
     build_pdf(EN_CHAPTERS, CSS_EN, OUT_DIR / "luatex-cn-wiki-en.pdf", is_zh=False)
+
+    # 生成 stamp：记录本次构建对应的 wiki/repo commit，
+    # CI workflow 据此判断 wiki 是否有更新、需不需要重建
+    stamp = {
+        "generated_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "repo_commit": git_head(Path(__file__).resolve().parent.parent),
+        "wiki_commit": git_head(WIKI_DIR),
+    }
+    stamp_path = OUT_DIR / "wiki-pdf-stamp.json"
+    stamp_path.write_text(
+        json.dumps(stamp, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("Stamp:", stamp)
 
     print("\nDone! PDFs are in:", OUT_DIR)
 
