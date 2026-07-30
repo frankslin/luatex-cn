@@ -11,6 +11,8 @@ on:
 
 jobs:
   wiki-sync:
+    # 只在 open-guji 主仓库运行，fork 上没有 Gitee 密钥也无需同步
+    if: github.repository_owner == 'open-guji'
     runs-on: ubuntu-latest
     steps:
       - name: Setup SSH
