@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install TeX Live (texlua only)
-        uses: TeX-Live/setup-texlive-action@v3
+        uses: TeX-Live/setup-texlive-action@v4
         with:
           cache: true
           packages: |
@@ -36,10 +36,10 @@ jobs:
     needs: unit-test
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install TeX Live
-        uses: TeX-Live/setup-texlive-action@v3
+        uses: TeX-Live/setup-texlive-action@v4
         with:
           cache: true
           packages: |
@@ -71,7 +71,7 @@ jobs:
           sudo apt-get install -y poppler-utils python3-pil python3-numpy
 
       - name: Cache test fonts
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: test/fonts
           key: test-fonts-${{ hashFiles('scripts/download_test_fonts.sh') }}
@@ -108,7 +108,7 @@ jobs:
       - name: Upload regression diffs
         # 失败时上传三联对比图（基线 | 当前·红框标注 | 差异热区）及原始 diff
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: regression-diffs
           path: |
