@@ -1,0 +1,55 @@
+{
+  "manifest_version": 1,
+  "comment": "Canonical font manifest. Machine-consumable source of truth for every font the project downloads. Fonts go to font_dir (used via OSFONTDIR), never into the user's system font library. URLs must be immutable (pinned commit); sha256 is verified after download.",
+  "font_dir": "test/fonts",
+  "fonts": [
+    {
+      "name": "TW-Kai",
+      "file": "TW-Kai-98_1.ttf",
+      "family": "TW-Kai",
+      "font_version": "11503.01",
+      "format": "ttf",
+      "size": 36924208,
+      "sha256": "c206333edcc3c8c86ee547da4c78ad1c8f7ec2670a2b550a768532258f75806a",
+      "license": "OFL-1.1 OR OGDL-1.0",
+      "origin": "https://data.gov.tw/dataset/5961",
+      "urls": [
+        "https://raw.githubusercontent.com/free-fonts-npm/TW-CNS11643-Fonts/de5bd2e37371798f996bac11ea8cf9d3a411749e/2026-05-05/Fonts_Kai/TW-Kai-98_1.ttf"
+      ],
+      "coverage": "URO 99.7%, Ext-A 100%, CJK punct 100%; no Ext-B",
+      "required_for": ["regression-test"]
+    },
+    {
+      "name": "TW-Kai-Ext-B",
+      "file": "TW-Kai-Ext-B-98_1.ttf",
+      "family": "TW-Kai-Ext-B",
+      "font_version": "11505.01",
+      "format": "ttf",
+      "size": 46506552,
+      "sha256": "562d19fde56dfa52a3fed88a53154698e1d66e4b9c0a1faa9ba4ffa98e9d7a92",
+      "license": "OFL-1.1 OR OGDL-1.0",
+      "origin": "https://data.gov.tw/dataset/5961",
+      "urls": [
+        "https://raw.githubusercontent.com/free-fonts-npm/TW-CNS11643-Fonts/de5bd2e37371798f996bac11ea8cf9d3a411749e/2026-05-05/Fonts_Kai/TW-Kai-Ext-B-98_1.ttf"
+      ],
+      "coverage": "Ext-B 100%, Ext-C 98.6%, Ext-D 87.1%, Ext-E 21.9%",
+      "required_for": ["optional"]
+    },
+    {
+      "name": "TW-Kai-Plus",
+      "file": "TW-Kai-Plus-98_1.ttf",
+      "family": "TW-Kai-Plus",
+      "font_version": "11505.01",
+      "format": "ttf",
+      "size": 25307452,
+      "sha256": "acd099424c70c2baf3fe8d7b31abbbc6a97af76ef210e94c07eb1eb84d1c62fb",
+      "license": "OFL-1.1 OR OGDL-1.0",
+      "origin": "https://data.gov.tw/dataset/5961",
+      "urls": [
+        "https://raw.githubusercontent.com/free-fonts-npm/TW-CNS11643-Fonts/de5bd2e37371798f996bac11ea8cf9d3a411749e/2026-05-05/Fonts_Kai/TW-Kai-Plus-98_1.ttf"
+      ],
+      "coverage": "Plane-15 PUA 24,978 chars (CNS chars not yet in Unicode)",
+      "required_for": ["optional"]
+    }
+  ]
+}
