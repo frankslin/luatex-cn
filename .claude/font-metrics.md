@@ -95,6 +95,31 @@ Songti SC 实测：version 17.0d2e3，仅 7,103 个基本区汉字（33.8%）—
 若未来需要 Ext-B 生僻字测试用例：引入 `TW-Kai-Ext-B-98_1.ttf`（下载
 脚本加一行即可，哈希见 0.1），fontspec 侧做 fallback 字体链。
 
+### 提高生僻字覆盖率的候选（fallback 链末端）
+
+以下项目均为开放授权，适合作为 fallback 字体链的最后一环，专门兜底
+超大字符集（Ext-B 及以后、GlyphWiki 收录字）：
+
+| 项目 | 基础/来源 | 风格 | 说明 |
+|------|-----------|------|------|
+| **Jigmo**（字雲） | 花園明朝的后继，GlyphWiki 资料生成 | 明朝体 | 花園明朝 A+B 已停更，Jigmo 持续跟进新版 Unicode；有 Jigmo/Jigmo2/Jigmo3 分档。也可基于 GlyphWiki 资料自行重新生成（含 SC/TC 字形风格定制） |
+| **遍黑体 / Plangothic Project** | 思源黑体（Source Han Sans）扩展 | 黑体 | 专攻 Ext-B~I 全覆盖，OFL；分 P1/P2 两个文件 |
+| **文津明朝 / WenJin Mincho** | 思源宋体（Source Han Serif）扩展 | 宋/明朝体 | 大字符集扩展，各有取舍 |
+| **源起明體 / Genki Mincho** | 思源宋体扩展 | 明朝体 | 同上，繁体取向 |
+| **源樣明體 / GenYo Mincho** | 思源宋体（台标字形调整） | 明朝体 | 台湾教育部字形习惯 |
+| **WFG 全宋體** | 全字符集宋体项目 | 宋体 | 面向全 Unicode CJK 覆盖 |
+| **BabelStone Han / 巴貝斯通漢** | Andrew West 维护 | 宋体 | 持续更新，收录大量罕用字、历史文字，Free license |
+
+注意事项：
+
+- **风格断裂**：fallback 链末端字体与主字体（楷体 TW-Kai）风格不同
+  （明朝/黑体 vs 楷书），生僻字会"跳出来"——古籍排版中可接受度需逐例
+  判断，必要时对 fallback 字形做灰度/标注提示。
+- **地区字形变体**：Noto Serif / Source Serif（以及上表思源系衍生）均
+  分 SC / TC / HK / TW 等地区风格，同一码点笔形不同。font-autodetect
+  与 fallback 链设计时应按文档语境（简/繁/港/台）选对应变体，而不是
+  混用；未来 manifest 中收录时也应把地区变体作为独立条目区分。
+
 ---
 
 # 字体 Metrics 特性总结
