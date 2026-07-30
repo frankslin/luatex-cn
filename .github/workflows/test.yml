@@ -61,7 +61,6 @@ jobs:
             etoolbox
             l3kernel
             l3packages
-            showframe
             pgf
             xcolor
 
@@ -80,9 +79,16 @@ jobs:
         run: sh scripts/download_test_fonts.sh
 
       - name: Link luatex-cn into TEXMFHOME
+        # 显式设置 TEXMFHOME（kpathsea 读取该环境变量），确保 lualatex
+        # 能找到仓库里的 ltc-*.cls 与 luatex-cn 宏包
         run: |
-          mkdir -p ~/texmf/tex/lualatex
-          ln -s "$GITHUB_WORKSPACE/tex" ~/texmf/tex/lualatex/luatex-cn
+          mkdir -p "$GITHUB_WORKSPACE/ci-texmf/tex/lualatex"
+          ln -s "$GITHUB_WORKSPACE/tex" "$GITHUB_WORKSPACE/ci-texmf/tex/lualatex/luatex-cn"
+          echo "TEXMFHOME=$GITHUB_WORKSPACE/ci-texmf" >> "$GITHUB_ENV"
+          kpsewhich -var-value TEXMFHOME || true
+
+      - name: Verify class resolution
+        run: kpsewhich ltc-guji.cls
 
       - name: Run regression tests
         run: python3 test/regression_test.py check
