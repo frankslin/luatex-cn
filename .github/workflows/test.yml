@@ -63,6 +63,7 @@ jobs:
             l3packages
             pgf
             xcolor
+            fandol
 
       - name: Install system dependencies
         run: |
