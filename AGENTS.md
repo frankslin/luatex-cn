@@ -101,6 +101,11 @@ texlua test/unit_test/core/layout-grid-test.lua
 # 首次运行前：下载测试字体 TW-Kai 到 test/fonts/（不入库，不装系统字体）
 sh scripts/download_test_fonts.sh
 
+# 使用者日常排版的免安装字体（同一 manifest/脚本）：
+#   --user 装入 TEXMFHOME/fonts/truetype/luatex-cn/；--dest DIR 放入文档项目目录
+#   文档中 \setmainfont{TW-Kai-98_1.ttf} 或 \setmainfont{X.ttf}[Path=./fonts/] 直接引用
+python3 scripts/download_fonts.py --all --user
+
 # 运行所有测试
 python3 test/regression_test.py check
 
