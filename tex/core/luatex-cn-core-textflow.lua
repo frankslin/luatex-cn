@@ -572,7 +572,10 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
             local sid = D.get_attribute(n, constants.ATTR_STYLE_REG_ID)
             if sid and sid > 0 then
                 local sgh = style_registry.get_grid_height(sid)
-                if sgh and sgh > 0 and sgh ~= gh then
+                -- sgh == 0 is a valid override: zero-advance overlay glyph
+                -- (e.g. the compressed closing bracket of a jiao note that
+                -- shares its cell with the following character)
+                if sgh and sgh >= 0 and sgh ~= gh then
                     if not node_heights then
                         node_heights = {}
                         for j = 1, i - 1 do node_heights[j] = gh end
@@ -690,7 +693,7 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
                 local sid = D.get_attribute(node_info.node, constants.ATTR_STYLE_REG_ID)
                 if sid and sid > 0 then
                     local style_ch = style_registry.get_grid_height(sid)
-                    if style_ch and style_ch > 0 then
+                    if style_ch and style_ch >= 0 then
                         node_cell_h = style_ch
                     end
                 end
