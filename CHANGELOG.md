@@ -5,6 +5,7 @@
 ## [未发布]
 
 新增：
+- 免安装字体支持 — \设置字体族 接受注册表别名（如 {Jigmo} 自动展开为 Jigmo+Jigmo2）、字体文件名与路径（{fonts/MyFont.ttf}），系统已装则用系统的，否则按 ./fonts/ → 文档目录 → kpse（TEXMFHOME/OSFONTDIR）查找本地文件，均未找到时报错并提示下载脚本用法
 - scripts/download_fonts.py 新增 --user（安装到 TEXMFHOME/fonts/truetype/luatex-cn/，免管理员权限、不进系统字体库）与 --dest DIR（放入文档项目目录），下载后可用 \setmainfont{文件名.ttf} 直接引用
 - 字体下载支持 npm woff2 切片源 — 下载 tarball 后用 fonttools 合并为单个 TTF（vert/vrt2 竖排特性保留），首个条目为朱雀仿宋 @free-fonts/zhuque-fangsong
 

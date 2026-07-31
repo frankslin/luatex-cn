@@ -149,4 +149,128 @@ test_utils.run_test("add_family_fallback: single font registers nothing", functi
     luaotfload.add_fallback = org
 end)
 
+-- ============================================================================
+-- registry / find_font_file / prepare_family（字体族别名与免安装字体解析）
+-- ============================================================================
+
+test_utils.run_test("registry: consistent with font-manifest.json aliases", function()
+    local f = assert(io.open("scripts/font-manifest.json", "rb"))
+    local manifest = f:read("*a")
+    f:close()
+    local block = manifest:match('"aliases"%s*:%s*(%b{})')
+    test_utils.assert_type(block, "string", "manifest missing aliases block")
+
+    local manifest_files = 0
+    for _ in block:gmatch('%.tt[fc]"') do manifest_files = manifest_files + 1 end
+    local registry_files = 0
+    for alias, def in pairs(fontdetect.registry) do
+        assert(block:find('"' .. alias .. '"', 1, true),
+            "manifest aliases 缺少别名 " .. alias)
+        for _, m in ipairs(def.members) do
+            registry_files = registry_files + 1
+            assert(block:find('"' .. m.file .. '"', 1, true),
+                "manifest aliases 缺少文件 " .. m.file)
+        end
+    end
+    test_utils.assert_eq(manifest_files, registry_files,
+        "manifest 与 registry 的成员文件数不一致")
+end)
+
+test_utils.run_test("find_font_file: checks ./fonts/ then ./", function()
+    local org = fontdetect._internal.file_exists
+    fontdetect._internal.file_exists = function(p) return p == "./fonts/Jigmo2.ttf" end
+    test_utils.assert_eq(fontdetect.find_font_file("Jigmo2.ttf"), "./fonts/Jigmo2.ttf")
+
+    fontdetect._internal.file_exists = function(p) return p == "./Jigmo2.ttf" end
+    test_utils.assert_eq(fontdetect.find_font_file("Jigmo2.ttf"), "./Jigmo2.ttf")
+
+    fontdetect._internal.file_exists = function() return false end
+    test_utils.assert_eq(fontdetect.find_font_file("Jigmo2.ttf"), nil)
+    fontdetect._internal.file_exists = org
+end)
+
+local function with_family_mocks(opts, body)
+    -- 统一装拆 prepare_family 依赖的 mock，返回捕获的 macros / fallback entries
+    local org_name_lookup = fontdetect._internal.name_lookup
+    local org_exists = fontdetect._internal.file_exists
+    _G.luaotfload = _G.luaotfload or {}
+    local org_fb = luaotfload.add_fallback
+    local org_set_macro = token.set_macro
+    local captured = { macros = {}, fb = nil }
+    fontdetect._internal.name_lookup = opts.name_lookup or function() return false end
+    fontdetect._internal.file_exists = opts.file_exists or function() return false end
+    luaotfload.add_fallback = function(id, entries)
+        captured.fb = { id = id, entries = entries }
+    end
+    token.set_macro = function(name, value) captured.macros[name] = value end
+
+    local ok, err = pcall(body, captured)
+
+    fontdetect._internal.name_lookup = org_name_lookup
+    fontdetect._internal.file_exists = org_exists
+    luaotfload.add_fallback = org_fb
+    token.set_macro = org_set_macro
+    if not ok then error(err, 0) end
+end
+
+test_utils.run_test("prepare_family: alias mixes system name and local file", function()
+    with_family_mocks({
+        name_lookup = function(n) return n == "Jigmo" end,
+        file_exists = function(p) return p == "./fonts/Jigmo2.ttf" end,
+    }, function(captured)
+        local resolved = fontdetect.prepare_family("famchain", "Jigmo")
+        test_utils.assert_eq(#resolved, 2)
+        test_utils.assert_eq(resolved[1].kind, "name")
+        test_utils.assert_eq(resolved[1].value, "Jigmo")
+        test_utils.assert_eq(resolved[2].kind, "path")
+        test_utils.assert_eq(resolved[2].value, "./fonts/Jigmo2.ttf")
+        -- 路径条目必须用 [路径] 方括号语法（file: 带路径会解析失败）
+        test_utils.assert_eq(captured.fb.entries[1], "[./fonts/Jigmo2.ttf]:mode=node;")
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_main_tl, "Jigmo")
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_dir_tl, "")
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_fallback_tl, "famchain")
+    end)
+end)
+
+test_utils.run_test("prepare_family: alias member missing raises with download hint", function()
+    with_family_mocks({}, function()
+        local ok, err = pcall(fontdetect.prepare_family, "famchain", "Jigmo")
+        test_utils.assert_eq(ok, false)
+        test_utils.assert_match(tostring(err), "download_fonts%.py")
+        test_utils.assert_match(tostring(err), "Jigmo2%.ttf")
+    end)
+end)
+
+test_utils.run_test("prepare_family: file main gets Path dir, name fallback", function()
+    with_family_mocks({
+        file_exists = function(p) return p == "fonts/My.ttf" end,
+    }, function(captured)
+        local resolved = fontdetect.prepare_family("famchain", "fonts/My.ttf, TW-Kai")
+        test_utils.assert_eq(#resolved, 2)
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_main_tl, "My.ttf")
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_dir_tl, "fonts/")
+        test_utils.assert_eq(captured.fb.entries[1], "name:TW-Kai:mode=node;")
+    end)
+end)
+
+test_utils.run_test("prepare_family: single name registers no fallback", function()
+    with_family_mocks({}, function(captured)
+        local resolved = fontdetect.prepare_family("famchain", "FandolSong")
+        test_utils.assert_eq(#resolved, 1)
+        test_utils.assert_eq(captured.fb, nil)
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_main_tl, "FandolSong")
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_fallback_tl, "")
+    end)
+end)
+
+test_utils.run_test("prepare_family: bare filename resolved via find_font_file", function()
+    with_family_mocks({
+        file_exists = function(p) return p == "./fonts/Jigmo2.ttf" end,
+    }, function(captured)
+        local resolved = fontdetect.prepare_family("famchain", "TW-Kai, Jigmo2.ttf")
+        test_utils.assert_eq(resolved[2].kind, "path")
+        test_utils.assert_eq(captured.fb.entries[1], "[./fonts/Jigmo2.ttf]:mode=node;")
+    end)
+end)
+
 print("\nAll font-autodetect tests passed!")
