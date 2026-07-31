@@ -111,6 +111,14 @@ python3 test/regression_test.py check test/regression_test/basic/tex/guji.tex
 python3 test/regression_test.py save test/regression_test/basic/tex/guji.tex
 ```
 
+### 几何测试（Geometry Test）
+```bash
+# 不依赖基线图像的自校验：解析 PDF 内容流，断言每列字形基线等距。
+# 像素回归测试只能保证"和上次一样"——若 bug 已存在于基线中则无法发现；
+# 此测试能抓「一」「丶」等墨迹不跨基线的字被整字偏移的问题（LEARNING.md 3.6）
+python3 test/geometry_test.py
+```
+
 回归测试要点：
 
 - **测试字体**：测试 .tex 硬编码 TW-Kai 字体。`regression_test.py` 会自动把

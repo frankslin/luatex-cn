@@ -94,6 +94,11 @@ local function handle_glyph_node(curr, p_head, pos, params, ctx)
     glyph_dims.depth = d * v_scale
     glyph_dims.char = D.getfield(curr, "char")
     glyph_dims.font = D.getfield(curr, "font")
+    glyph_dims.v_scale = v_scale
+    -- em 框居中（固定基线）只用于普通文字；标点依赖墨迹居中把圈点放在
+    -- 格中央，旋转字形的旋转中心也按墨迹计算，两者保持旧行为
+    glyph_dims.em_center = (D.get_attribute(curr, constants.ATTR_PUNCT_TYPE) == nil)
+        and (D.get_attribute(curr, constants.ATTR_VERT_ROTATE) ~= 1)
 
     -- P1: read style fields from style_registry, not layout_map
     local glyph_style_id = D.get_attribute(curr, constants.ATTR_STYLE_REG_ID)

@@ -195,6 +195,70 @@ test_utils.run_test("calc_grid_position: RTL multi-column", function()
 end)
 
 -- ============================================================================
+-- calc_grid_position: em 框居中 vs 墨迹居中
+-- ============================================================================
+
+test_utils.run_test("calc_grid_position: em_center uses font ascender/descender", function()
+    local gw = 65536 * 20
+    local gh = 65536 * 24
+    -- 模拟「一」：墨迹全在基线上方（depth = 0）
+    local h = 65536 * 10
+    local d = 0
+    local asc = 65536 * 18   -- 0.88em @ ~20pt
+    local desc = 65536 * 2
+
+    local saved_getfont = font.getfont
+    font.getfont = function(id)
+        return { size = 65536 * 20, parameters = { ascender = asc, descender = desc } }
+    end
+
+    local params = {
+        grid_width = gw, grid_height = gh, total_cols = 1,
+        shift_x = 0, shift_y = 0, half_thickness = 0,
+        v_align = "center", h_align = "center",
+        y_sp = 0, cell_height = gh,
+    }
+
+    -- 墨迹居中（em_center 未设置）：按 h+d 居中
+    local _, y_ink = pos.calc_grid_position(0, { width = gw, height = h, depth = d }, params)
+    test_utils.assert_eq(y_ink, -(gh + h + d) / 2 + d)
+
+    -- em 框居中：基线位置由字体 ascender/descender 决定，与字形墨迹无关
+    local _, y_em = pos.calc_grid_position(0,
+        { width = gw, height = h, depth = d, font = 1, em_center = true }, params)
+    test_utils.assert_eq(y_em, -(gh + asc + desc) / 2 + desc)
+
+    -- v_scale 应同时缩放 em 框
+    local _, y_scaled = pos.calc_grid_position(0,
+        { width = gw, height = h / 2, depth = d, font = 1, em_center = true, v_scale = 0.5 }, params)
+    test_utils.assert_eq(y_scaled, -(gh + (asc + desc) * 0.5) / 2 + desc * 0.5)
+
+    font.getfont = saved_getfont
+end)
+
+test_utils.run_test("calc_grid_position: em_center falls back to ink box without font params", function()
+    local gw = 65536 * 20
+    local gh = 65536 * 24
+    local h = 65536 * 10
+    local d = 65536 * 2
+
+    local saved_getfont = font.getfont
+    font.getfont = function(id) return { size = 65536 * 20 } end
+
+    local params = {
+        grid_width = gw, grid_height = gh, total_cols = 1,
+        shift_x = 0, shift_y = 0, half_thickness = 0,
+        v_align = "center", h_align = "center",
+        y_sp = 0, cell_height = gh,
+    }
+    local _, y = pos.calc_grid_position(0,
+        { width = gw, height = h, depth = d, font = 1, em_center = true }, params)
+    test_utils.assert_eq(y, -(gh + h + d) / 2 + d)
+
+    font.getfont = saved_getfont
+end)
+
+-- ============================================================================
 -- position_glyph (basic test)
 -- ============================================================================
 

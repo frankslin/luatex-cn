@@ -140,6 +140,27 @@ local function calculate_y_position(row, grid_height, shift_y)
     return (-row * grid_height) - (shift_y or 0)
 end
 
+--- 获取字体 em 框的垂直跨度（ascender/descender，已按字号缩放）
+-- 竖排格内垂直居中有两种口径：
+--   墨迹居中：按字形节点的 height+depth 居中（旧行为）。对墨迹不跨基线的
+--   字（如「一」「丶」，depth=0 但墨迹远在基线之上）会把整字抬高。
+--   em 框居中：按字体的 ascender/descender 固定基线在格内的位置，
+--   保留字体设计的相对位置，使同字体所有字共享基线。
+-- 标点（句读圈点需要落在格中央）与旋转字形仍用墨迹居中。
+-- @param font_id (number) 字体 ID
+-- @param scale (number|nil) 额外的垂直缩放（v_scale），默认 1
+-- @return (number|nil, number|nil) ascender, descender (sp)；字体无参数时返回 nil
+local function get_em_span(font_id, scale)
+    if not font_id then return nil end
+    local f = font.getfont(font_id)
+    local p = f and f.parameters
+    local asc = p and p.ascender
+    local desc = p and p.descender
+    if not (asc and desc) then return nil end
+    scale = scale or 1
+    return asc * scale, desc * scale
+end
+
 --- 在指定坐标处定位单个字形节点
 -- 这是在精确位置放置字符的核心函数。
 -- 它设置 xoffset/yoffset 并创建负 kern 以使字符堆叠。
@@ -184,14 +205,16 @@ local function position_glyph(glyph_direct, x, y, params)
     end
 
     -- Calculate vertical offset based on alignment
-    local char_total_height = g_height + g_depth
     local y_offset
     if v_align == "top" then
         y_offset = y - g_height
     elseif v_align == "bottom" then
         y_offset = y - cell_height + g_depth
     else -- center
-        y_offset = y - (cell_height + char_total_height) / 2 + g_depth
+        -- em 框居中（见 get_em_span 注释）；字体无参数时退回墨迹居中
+        local asc, desc = get_em_span(D.getfield(glyph_direct, "font"))
+        if not asc then asc, desc = g_height, g_depth end
+        y_offset = y - (cell_height + asc + desc) / 2 + desc
     end
 
     -- Apply offsets
@@ -369,8 +392,12 @@ local function calc_grid_position(col, glyph_dims, params)
     if v_align == "top" then
         y_offset = y_offset - h
     elseif v_align == "center" then
-        local char_total_height = h + d
-        y_offset = y_offset - (cell_height + char_total_height) / 2 + d
+        local asc, desc
+        if glyph_dims.em_center then
+            asc, desc = get_em_span(glyph_dims.font, glyph_dims.v_scale)
+        end
+        if not asc then asc, desc = h, d end
+        y_offset = y_offset - (cell_height + asc + desc) / 2 + desc
     else -- bottom
         y_offset = y_offset - cell_height + d
     end
@@ -389,6 +416,7 @@ local _internal = {
 -- Create module table
 local text_position = {
     get_visual_center = get_visual_center,
+    get_em_span = get_em_span,
     position_glyph = position_glyph,
     calc_grid_position = calc_grid_position,
     calculate_rtl_position = calculate_rtl_position,
