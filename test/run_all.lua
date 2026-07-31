@@ -3,6 +3,11 @@
 
 -- List of tests to run (ordered by dependency: util → core → plugin/feature)
 local tests = {
+    -- Shared layer (clreq rule kernel, pure functions)
+    "test/unit_test/shared/punct-table-test.lua",
+    "test/unit_test/shared/adjust-test.lua",
+    "test/unit_test/shared/kinsoku-test.lua",
+
     -- Util layer (pure functions, no complex deps)
     "test/unit_test/util/utils-test.lua",
     "test/unit_test/util/text-utils-test.lua",
