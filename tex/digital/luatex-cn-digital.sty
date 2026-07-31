@@ -112,8 +112,13 @@
       {
         \tl_if_empty:NF \l__luatexcn_digital_right_col_tl
           {
-            % Empty left column: call TextFlow with empty content to consume pending state
-            \TextFlow[only-column=left, auto-balance=false]{ }
+            % Empty left column: an empty TextFlow emits NO nodes, so the
+            % layout pass never sees the left-only call and pending_sub_col=1
+            % survives, corrupting the next \DualColumn (content overprints
+            % the previous column). Typeset one U+3000 (invisible full-width
+            % space glyph) so a real mode-2 node reaches the layout and
+            % consumes the pending state.
+            \TextFlow[only-column=left, auto-balance=false]{　}
           }
       }
       {
