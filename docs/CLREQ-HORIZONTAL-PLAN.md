@@ -124,19 +124,27 @@ TeX 段落
 
 ## 4. 路线图
 
-### H0 · 共享内核（横竖排都要用）
+### H0 · 共享内核（横竖排都要用）✅ 已完成
 
-- `punct-table.lua`：clreq 附录全表数据化——字符 → {类别, 字面分布(大陆/港台), 宽度,
+- ✅ `punct-table.lua`：clreq 附录全表数据化——字符 → {类别, 字面分布(大陆/港台), 宽度,
   可调空间(始/末/两侧), 不可分离, 直排右旋, 行首禁则, 行尾禁则}。
-- `adjust.lua`：一维优先级空间分配器。输入 `{目标长度, 间隙列表}`，输出每个间隙的最终值。
+- ✅ `adjust.lua`：一维优先级空间分配器。输入 `{目标长度, 间隙列表}`，输出每个间隙的最终值。
   实现 clreq 挤压 7 级 + 拉伸 2 级 + 兜底均分，含各项上下限
   （7 级：行末标点 → 西文词距 → 间隔号 → 夹注符号 → 逗号/顿号/分号 → 中西间距 → 句号/问号/叹号）。
-- `kinsoku.lua`：四级禁则（不处理 / 基本 / GB / 严格）+ 符号分离禁则，
+- ✅ `kinsoku.lua`：四级禁则（不处理 / 基本 / GB / 严格）+ 符号分离禁则，
   输出「penalty 值」（横排后端用）或「推出/挤进决策」（竖排后端用）。
-- 全部是纯 Lua 纯函数，用 `texlua` 直接单测，不需要编译 PDF。
+- ✅ 全部是纯 Lua 纯函数，用 `texlua` 直接单测，不需要编译 PDF。
 
 **验收**：三个模块单测覆盖率 > 90%；clreq 条款与测试用例一一对应。
 **工作量：12–18 人日**
+
+> **完成记录（2026-07-31，PR #125）**：交付 `tex/shared/` 三模块 +
+> `ai_must_read/clreq-shared-core.md` 接口契约 + `test/unit_test/shared/`
+> 62 个用例（每条标注 clreq 条款，覆盖全部挤压/拉伸优先级分支与四级禁则）。
+> unit test 33/33、回归三套全绿。实现注记：① 附录「不可分离/直排右旋」两列
+> 从 clreq 原文逐条核对；② clreq 基本级行首禁含连接号/间隔号/分隔号，
+> 严于现行竖排引擎，P2 接线时按 R5 分档启用；③ 长串两字宽标点的对边界
+> 放行由 `pair_boundary_breakable()` 提供，调用方持 run 信息时使用。
 
 ### H1 · 横排节点管道（骨架 + 中西间距 + 标点宽度）
 
@@ -261,13 +269,15 @@ TeX 段落
 
 ---
 
-## 8. 建议的第一步
+## 8. 建议的第一步 ✅ 已完成（PR #125）
 
 **H0 单独立项，先出接口设计再写代码**。具体交付：
 
-1. `ai_must_read/clreq-shared-core.md`：`adjust.lua` 的输入输出契约、
+1. ✅ `ai_must_read/clreq-shared-core.md`：`adjust.lua` 的输入输出契约、
    `punct-table.lua` 的字段定义、`kinsoku.lua` 的决策语义。
-2. `tex/shared/luatex-cn-punct-table.lua` + `texlua` 单测。
-3. `tex/shared/luatex-cn-adjust.lua` + 覆盖 clreq 挤压/拉伸全部优先级分支的单测。
+2. ✅ `tex/shared/luatex-cn-punct-table.lua` + `texlua` 单测。
+3. ✅ `tex/shared/luatex-cn-adjust.lua` + 覆盖 clreq 挤压/拉伸全部优先级分支的单测。
 
 这三样做完（约 15 人日），横排和竖排两条线就都有了地基，之后可以并行推进。
+实际交付连同 `kinsoku.lua` 一并完成（H0 全部三模块），下一步是 H1 横排节点管道，
+或先做 P1（`punct-table` 回流竖排）。
