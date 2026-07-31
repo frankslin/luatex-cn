@@ -99,15 +99,7 @@
           { \exp_args:NV \__luatexcn_set_indent:n \l__luatexcn_digital_right_indent_tl }
         \TextFlow[only-column=right, auto-balance=false]{ \l__luatexcn_digital_right_col_tl }
       }
-    % When left sub-column is empty but right was non-empty, insert a
-    % full-width space as placeholder. This ensures the left-only TextFlow
-    % produces a glyph node that consumes the pending_sub_col=1 state
-    % from the right TextFlow, preventing state corruption for subsequent
-    % \DualColumn calls.
     % Output left sub-column (even if empty)
-    % When left is empty and right was non-empty, the empty TextFlow call
-    % will trigger the pending_sub_col cleanup logic in textflow.lua:434-438,
-    % which properly advances cur_row without generating any glyph nodes.
     \tl_if_empty:NTF \l__luatexcn_digital_left_col_tl
       {
         \tl_if_empty:NF \l__luatexcn_digital_right_col_tl
