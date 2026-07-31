@@ -167,10 +167,28 @@
 
 % Command to set main font with a fallback chain in one step
 % Usage: \SetMainFontChain{Font1, Font2, Font3}
+% 字体族：首字体为主字体，其余各项注册为 luaotfload fallback 链，
+% 首字体缺字时按顺序回退（如 {FandolSong, TW-Kai, TW-Kai-Ext-B}）。
+\int_new:N \g__luatexcn_fontfamily_int
 \DeclareDocumentCommand{\setfontfamily}{m}
   {
     \tl_set:Nx \l_tmpa_tl { \clist_item:nn { #1 } { 1 } }
-    \exp_args:NV \setmainfont \l_tmpa_tl
+    \int_compare:nNnTF { \clist_count:n { #1 } } > { 1 }
+      {
+        \int_gincr:N \g__luatexcn_fontfamily_int
+        \tl_set:Nx \l_tmpb_tl { luatexcnfamfb \int_use:N \g__luatexcn_fontfamily_int }
+        \lua_now:e
+          {
+            fontdetect.add_family_fallback("\l_tmpb_tl","\clist_use:nn { #1 } { , }")
+          }
+        % \use:x 预展开字体名与链名，规避 xparse 可选参数不展开变量的限制
+        \use:x
+          {
+            \exp_not:N \setmainfont { \l_tmpa_tl }
+              [ RawFeature = { fallback = \l_tmpb_tl } ]
+          }
+      }
+      { \exp_args:NV \setmainfont \l_tmpa_tl }
   }
 
 \DeclareDocumentCommand{\setFontFamily}{m}{\setfontfamily{#1}}

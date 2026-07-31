@@ -41,6 +41,29 @@ def download(url, dest):
     tmp.rename(dest)
 
 
+def extract_from_archive(archive, member, dest, font_dir):
+    """从 zip 压缩包中解出字体文件。压缩包按 sha256 缓存复用。"""
+    import zipfile
+
+    cache_dir = font_dir / ".archives"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached = cache_dir / (archive["sha256"][:16] + ".zip")
+    if not (cached.exists() and sha256_of(cached) == archive["sha256"]):
+        download(archive["url"], cached)
+        actual = sha256_of(cached)
+        if actual != archive["sha256"]:
+            cached.unlink()
+            raise RuntimeError(
+                f"压缩包 sha256 不符: 期望 {archive['sha256']} 实际 {actual}")
+    with zipfile.ZipFile(cached) as zf:
+        with zf.open(archive.get("member", member)) as src, open(dest, "wb") as out:
+            while True:
+                chunk = src.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--all", action="store_true", help="包含 optional 字体")
@@ -73,15 +96,25 @@ def main():
                 failures.append(f"{font['file']}: 缺失")
             continue
 
-        for url in font["urls"]:
+        archive = font.get("archive")
+        if archive:
+            # zip 分发的字体：下载（或复用）压缩包，校验后解出成员文件。
+            # 压缩包按其 sha256 缓存在 font_dir/.archives/，同包多字体只下一次。
             try:
-                download(url, dest)
-                break
-            except Exception as e:  # noqa: BLE001 - 尝试下一个镜像
-                print(f"  失败 ({e})，尝试下一个源...", file=sys.stderr)
+                extract_from_archive(archive, font["file"], dest, font_dir)
+            except Exception as e:  # noqa: BLE001
+                failures.append(f"{font['file']}: 压缩包获取失败 ({e})")
+                continue
         else:
-            failures.append(f"{font['file']}: 所有下载源均失败")
-            continue
+            for url in font["urls"]:
+                try:
+                    download(url, dest)
+                    break
+                except Exception as e:  # noqa: BLE001 - 尝试下一个镜像
+                    print(f"  失败 ({e})，尝试下一个源...", file=sys.stderr)
+            else:
+                failures.append(f"{font['file']}: 所有下载源均失败")
+                continue
 
         actual = sha256_of(dest)
         if actual != font["sha256"]:
