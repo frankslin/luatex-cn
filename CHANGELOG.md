@@ -5,12 +5,24 @@
 ## [未发布]
 
 新增：
-- 免安装字体支持 — \设置字体族 接受注册表别名（如 {Jigmo} 自动展开为 Jigmo+Jigmo2）、字体文件名与路径（{fonts/MyFont.ttf}），系统已装则用系统的，否则按 ./fonts/ → 文档目录 → kpse（TEXMFHOME/OSFONTDIR）查找本地文件，均未找到时报错并提示下载脚本用法
-- scripts/download_fonts.py 新增 --user（安装到 TEXMFHOME/fonts/truetype/luatex-cn/，免管理员权限、不进系统字体库）与 --dest DIR（放入文档项目目录），下载后可用 \setmainfont{文件名.ttf} 直接引用
-- 字体下载支持 npm woff2 切片源 — 下载 tarball 后用 fonttools 合并为单个 TTF（vert/vrt2 竖排特性保留），首个条目为朱雀仿宋 @free-fonts/zhuque-fangsong
+- 免安装字体支持 — \设置字体族 接受注册表别名（如 {Jigmo} 自动展开为 Jigmo+Jigmo2）、字体文件名与路径（{fonts/MyFont.ttf}），系统已装则用系统的，否则按 ./fonts/ → 文档目录 → kpse（TEXMFHOME/OSFONTDIR）查找本地文件，均未找到时报错并提示下载脚本用法 (#123)
+- scripts/download_fonts.py 新增 --user（安装到 TEXMFHOME/fonts/truetype/luatex-cn/，免管理员权限、不进系统字体库）与 --dest DIR（放入文档项目目录），下载后可用 \setmainfont{文件名.ttf} 直接引用 (#122)
+- 字体下载支持 npm woff2 切片源 — 下载 tarball 后用 fonttools 合并为单个 TTF（vert/vrt2 竖排特性保留），首个条目为朱雀仿宋 @free-fonts/zhuque-fangsong (#122)
+- 字体清单 scripts/font-manifest.json — 测试与用户字体统一来源，固定 URL、SHA-256 校验，测试字体经 OSFONTDIR 提供、不装系统字体 (#109)
+- 几何自校验测试 test/geometry_test.py — 解析 PDF 内容流断言每列字形基线等距，不依赖基线图像即可发现整字偏移类 bug (#113)
 
 修复：
+- 格内垂直居中改用 em 框基线对齐 — 修复「一」「丶」等墨迹不跨基线的字被整字偏移的问题，全量回归基线随之重存 (#113)
+- 装饰符号（圈点等）错位 — get_visual_center 按 Unicode 码位查字形 descriptions (#118)
+- 数字化模式空左小列必须产生真实节点；grid-height=0 样式覆盖按零步进处理 (#120)
+- 文本流换列守卫 — 列剩余空间容不下首节点时先换列再放置，放置内容后清除 just_wrapped_column 标志，修复内容越界与重复换列 (#108)
+- 操作系统探测改用 LuaTeX 全局变量 os.name，提升跨平台兼容性 (#100)
 - test/run_all.lua 失败漏报 — LuaTeX 的 os.execute 返回原始状态数字而非布尔值，此前任何单元测试失败都会被统计为通过 (#121)
+
+维护：
+- CI 每个 PR 及 main/dev push 自动运行单元测试与回归测试；字体缓存按 manifest 哈希、预热 luaotfload 字体库、Linux 安装 Fandol、失败时上传对比图并写入 step summary (#106, #107, #114)
+- 回归测试改为精确像素比较（零容差），跨平台渲染差异通过仓库内固定字体解决；重存历史漂移基线、为未指定字体的用例固定 FandolSong、复活 3 个因缺字体长期失效的用例 (#101, #115, #116, #117)
+- 文档整理 — agent 指引迁移至 AGENTS.md 并将常用流程技能化；font-metrics.md 补全字体清单、覆盖率与许可证；wiki PDF 自动构建工作流 (#110, #112)
 
 ## [0.3.8] - 2026-05-09
 
