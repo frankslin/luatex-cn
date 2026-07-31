@@ -262,6 +262,29 @@ function fontdetect.get_font_setup()
     }
 end
 
+--- 注册字体族回退链（\设置字体族 / \setfontfamily 的多字体支持）
+-- 把列表第 2..n 项注册为 luaotfload fallback，使首字体缺字时逐级回退。
+-- @param id (string) fallback 链的唯一名称
+-- @param namelist (string) 逗号分隔的完整字体名列表（含首字体，首项会被跳过）
+function fontdetect.add_family_fallback(id, namelist)
+    local entries = {}
+    local first = true
+    for name in string.gmatch(namelist, "[^,]+") do
+        name = name:gsub("^%s+", ""):gsub("%s+$", "")
+        if name ~= "" then
+            if first then
+                first = false
+            else
+                table.insert(entries, "name:" .. name .. ":mode=node;")
+            end
+        end
+    end
+    if #entries > 0 and luaotfload and luaotfload.add_fallback then
+        luaotfload.add_fallback(id, entries)
+    end
+    return entries
+end
+
 -- 注册模块到 package.loaded
 package.loaded['fonts.luatex-cn-font-autodetect'] = fontdetect
 

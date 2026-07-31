@@ -116,4 +116,37 @@ test_utils.run_test("schemes: all platforms have required font categories", func
     end
 end)
 
+-- ============================================================================
+-- add_family_fallback（\设置字体族 的回退链）
+-- ============================================================================
+
+test_utils.run_test("add_family_fallback: skips first font, registers rest", function()
+    local captured = {}
+    _G.luaotfload = _G.luaotfload or {}
+    local org = luaotfload.add_fallback
+    luaotfload.add_fallback = function(id, entries)
+        captured.id, captured.entries = id, entries
+    end
+
+    local entries = fontdetect.add_family_fallback(
+        "famfbtest", "FandolSong, TW-Kai , TW-Kai-Ext-B")
+    test_utils.assert_eq(#entries, 2)
+    test_utils.assert_eq(entries[1], "name:TW-Kai:mode=node;")
+    test_utils.assert_eq(entries[2], "name:TW-Kai-Ext-B:mode=node;")
+    test_utils.assert_eq(captured.id, "famfbtest")
+
+    luaotfload.add_fallback = org
+end)
+
+test_utils.run_test("add_family_fallback: single font registers nothing", function()
+    local called = false
+    _G.luaotfload = _G.luaotfload or {}
+    local org = luaotfload.add_fallback
+    luaotfload.add_fallback = function() called = true end
+    local entries = fontdetect.add_family_fallback("famfbsingle", "FandolSong")
+    test_utils.assert_eq(#entries, 0)
+    test_utils.assert_eq(called, false)
+    luaotfload.add_fallback = org
+end)
+
 print("\nAll font-autodetect tests passed!")

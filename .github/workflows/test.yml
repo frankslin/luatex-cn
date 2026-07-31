@@ -74,7 +74,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: test/fonts
-          key: test-fonts-${{ hashFiles('scripts/download_test_fonts.sh') }}
+          key: test-fonts-${{ hashFiles('scripts/font-manifest.json') }}
 
       - name: Download test fonts
         run: sh scripts/download_test_fonts.sh
