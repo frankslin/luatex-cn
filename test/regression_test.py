@@ -32,8 +32,10 @@ if not list(FONTS_DIR.glob("*.ttf")):
         f"WARNING: {FONTS_DIR} 中没有字体文件，编译可能因缺少 TW-Kai 失败。\n"
         "请先运行: sh scripts/download_test_fonts.sh"
     )
-DIFF_THRESHOLD = 200
-DIFF_RATIO_THRESHOLD = 0.2
+# 精确比较：测试字体已全部钉定（TW-Kai 固定 commit 下载、FandolSong 随
+# TeX Live 分发），渲染跨环境逐字节可复现，任何像素差异都是真回归。
+# 曾经的容差（绝对 200px + 比例 0.2%，见 f9d06fd）是为吸收未钉定字体的
+# 跨平台渲染差异而设，钉定后反而会掩盖阈值以下的回归，已移除。
 
 # Test suites: each has its own tex/, baseline/, current/, diff/, pdf/ subdirectories
 SUITES = {
@@ -242,7 +244,7 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
             total_pixels += pixel_count
             total_diff_pixels += diff_count
 
-            if diff_count > DIFF_THRESHOLD and diff_ratio > DIFF_RATIO_THRESHOLD:
+            if diff_count > 0:
                 failing_pages.append(i + 1)
                 log_list.append(f"  Page {i+1} fails: {diff_count} ({diff_ratio:.4f}%) pixels difference.")
             elif diff_png.exists():
@@ -284,17 +286,6 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
             if pdf_file.exists():
                 pdf_file.unlink()
             return True, 0, log_list
-        elif total_diff_pixels < DIFF_THRESHOLD or total_diff_ratio < DIFF_RATIO_THRESHOLD and json_ok:
-            log_list.append(f"WARNING: {tex_file.name} has minor differences [{total_diff_pixels} " \
-                            f"({total_diff_ratio:.4f}%) pixels], but they are below threshold " \
-                            f"({DIFF_THRESHOLD} or {DIFF_RATIO_THRESHOLD:.4f}%). Marking as PASSED.")
-            for png in current_pngs:
-                png.unlink()
-            for diff_png in diff_dir.glob(f"diff_{pdf_file.stem}-*.png"):
-                diff_png.unlink()
-            if pdf_file.exists():
-                pdf_file.unlink()
-            return True, f"{total_diff_pixels} ({total_diff_ratio:.4f}%) pixels (ignored)", log_list
         else:
             if not json_ok:
                 log_list.append(f"FAIL: {tex_file.name} JSON mismatch")
