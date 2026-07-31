@@ -169,26 +169,46 @@
 % Usage: \SetMainFontChain{Font1, Font2, Font3}
 % 字体族：首字体为主字体，其余各项注册为 luaotfload fallback 链，
 % 首字体缺字时按顺序回退（如 {FandolSong, TW-Kai, TW-Kai-Ext-B}）。
+%
+% 三种规格均可混用，字体无需安装进系统：
+%   \设置字体族{Jigmo}                    -- 注册表别名，自动展开为 Jigmo+Jigmo2，
+%                                            系统有则用系统的，否则找本地文件
+%   \设置字体族{TW-Kai, Jigmo2.ttf}       -- 名字与文件名混搭
+%   \设置字体族{fonts/MyFont.ttf}         -- 带路径的字体文件
+% 文件查找顺序：./fonts/ → ./ → kpse（TEXMFHOME、OSFONTDIR）。
+% 找不到时报错并提示 scripts/download_fonts.py 的用法。
 \int_new:N \g__luatexcn_fontfamily_int
+\tl_new:N \l__luatexcn_family_main_tl
+\tl_new:N \l__luatexcn_family_dir_tl
+\tl_new:N \l__luatexcn_family_fallback_tl
 \DeclareDocumentCommand{\setfontfamily}{m}
   {
-    \tl_set:Nx \l_tmpa_tl { \clist_item:nn { #1 } { 1 } }
-    \int_compare:nNnTF { \clist_count:n { #1 } } > { 1 }
+    \int_gincr:N \g__luatexcn_fontfamily_int
+    \tl_set:Nx \l_tmpb_tl { luatexcnfamfb \int_use:N \g__luatexcn_fontfamily_int }
+    % 先清空，防止解析全部失败时沿用上次调用的残留值
+    \tl_clear:N \l__luatexcn_family_main_tl
+    \tl_clear:N \l__luatexcn_family_dir_tl
+    \tl_clear:N \l__luatexcn_family_fallback_tl
+    % prepare_family 解析别名/名字/文件，注册回退链，
+    % 并经 token.set_macro 回填 main/dir/fallback 三个 tl
+    \lua_now:e
       {
-        \int_gincr:N \g__luatexcn_fontfamily_int
-        \tl_set:Nx \l_tmpb_tl { luatexcnfamfb \int_use:N \g__luatexcn_fontfamily_int }
-        \lua_now:e
-          {
-            fontdetect.add_family_fallback("\l_tmpb_tl","\clist_use:nn { #1 } { , }")
-          }
-        % \use:x 预展开字体名与链名，规避 xparse 可选参数不展开变量的限制
+        fontdetect.prepare_family("\l_tmpb_tl","\clist_use:nn { #1 } { , }")
+      }
+    \tl_if_empty:NF \l__luatexcn_family_main_tl
+      {
+        % \use:x 预展开字体名与选项，规避 xparse 可选参数不展开变量的限制
         \use:x
           {
-            \exp_not:N \setmainfont { \l_tmpa_tl }
-              [ RawFeature = { fallback = \l_tmpb_tl } ]
+            \exp_not:N \setmainfont { \l__luatexcn_family_main_tl }
+              [
+                \tl_if_empty:NF \l__luatexcn_family_dir_tl
+                  { Path = \l__luatexcn_family_dir_tl , }
+                \tl_if_empty:NF \l__luatexcn_family_fallback_tl
+                  { RawFeature = { fallback = \l__luatexcn_family_fallback_tl } }
+              ]
           }
       }
-      { \exp_args:NV \setmainfont \l_tmpa_tl }
   }
 
 \DeclareDocumentCommand{\setFontFamily}{m}{\setfontfamily{#1}}

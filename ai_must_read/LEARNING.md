@@ -356,6 +356,59 @@ y = y - (cell_height + p.ascender + p.descender) / 2 + p.descender
 **适用场景**：任何按格定位字形的代码（主文本 `calc_grid_position`、
 侧批 sidenote、版心 `position_glyph`），三处已统一用 `get_em_span()`。
 
+### 3.7 luaotfload 字体请求语法：file: 带路径必挂，路径要用方括号
+
+**问题**：给 `luaotfload.add_fallback` 传文件路径条目时，字体加载失败
+（"Font \"file\" not found" 或 fallback 模块索引 nil 崩溃）。
+
+**根本原因**：luaotfload 请求解析器的 `file:` 前缀只接受**裸文件名**
+（经 kpse 在 cwd/TEXMF/OSFONTDIR 查找）；带 `/` 的相对或绝对路径都会解析失败。
+
+**错误方案**：
+```lua
+-- ❌ file: 带路径（相对/绝对都不行）
+luaotfload.add_fallback(id, { "file:fonts/Jigmo2.ttf:mode=node;" })
+luaotfload.add_fallback(id, { "file:/abs/path/Jigmo2.ttf:mode=node;" })
+```
+
+**正确方案**：
+```lua
+-- ✅ 路径用方括号语法；裸文件名才可用 file:
+luaotfload.add_fallback(id, { "[/abs/path/Jigmo2.ttf]:mode=node;" })
+luaotfload.add_fallback(id, { "file:Jigmo2.ttf:mode=node;" })
+```
+
+**关键点**：
+- fontspec 侧等价形式是 `\setmainfont{Jigmo2.ttf}[Path=./fonts/]`，无需安装系统字体
+- 检查字体名是否已在索引：用 `luaotfload.aux.resolve_fontname(name)`（查不到返回
+  false，不触发重扫）；早年的 `luaotfload.find_file` **已不存在**，写
+  `if lotf.find_file then ... end` 兜底"无法检查就当存在"会把没装的字体误判为已装
+
+**适用场景**：`\设置字体族` / `prepare_family` 的免安装字体解析（见
+`tex/fonts/luatex-cn-font-autodetect.lua`）。
+
+### 3.8 LuaTeX 的 os.execute 返回状态数字，不是布尔
+
+**问题**：`test/run_all.lua` 多年来把失败的测试文件统计为通过——注入必败
+文件后仍报 "ALL TESTS PASSED"。
+
+**根本原因**：LuaTeX/texlua 的 `os.execute` 不遵循 Lua 5.3 约定
+（`true/nil, "exit", code`），而是返回 C `system()` 的**原始状态数字**
+（成功=0，exit 1=256）。数字永远为真值，`if ok then` 恒成立。
+
+**正确方案**：
+```lua
+-- ✅ 两种返回形态都要兼容
+local ok = os.execute(cmd)
+if ok == true or ok == 0 then --[[ 成功 ]] end
+```
+
+**关键点**：
+- 验证方法：`os.execute("exit 1")` 在 texlua 下返回 `number 256`
+- 依赖子进程退出码的任何 texlua 脚本都要按此判定
+
+**适用场景**：texlua 编写的测试 runner、批处理脚本。
+
 ---
 
 ## 四、 PDF 渲染问题

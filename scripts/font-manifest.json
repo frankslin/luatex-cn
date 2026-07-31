@@ -1,7 +1,10 @@
 {
   "manifest_version": 2,
-  "comment": "Canonical font manifest. Machine-consumable source of truth for every font the project downloads. Fonts go to font_dir (used via OSFONTDIR), never into the user's system font library. URLs must be immutable (pinned commit); sha256 is verified after download. Entries with an npm source are built by merging unicode-range woff2 slices into one TTF (requires fonttools+brotli); only the tarball sha256 is pinned because the merged bytes may vary across fonttools versions.",
+  "comment": "Canonical font manifest. Machine-consumable source of truth for every font the project downloads. Fonts go to font_dir (used via OSFONTDIR), never into the user's system font library. URLs must be immutable (pinned commit); sha256 is verified after download. Entries with an npm source are built by merging unicode-range woff2 slices into one TTF (requires fonttools+brotli); only the tarball sha256 is pinned because the merged bytes may vary across fonttools versions. aliases group multiple member fonts under one family name for \\设置字体族 (must mirror fontdetect.registry in tex/fonts/luatex-cn-font-autodetect.lua).",
   "font_dir": "test/fonts",
+  "aliases": {
+    "Jigmo": ["Jigmo.ttf", "Jigmo2.ttf"]
+  },
   "fonts": [
     {
       "name": "TW-Kai",
