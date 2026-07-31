@@ -259,6 +259,31 @@ test_utils.run_test("calc_grid_position: em_center falls back to ink box without
 end)
 
 -- ============================================================================
+-- get_visual_center: descriptions 必须按 Unicode 键优先
+-- ============================================================================
+
+test_utils.run_test("get_visual_center: unicode key wins over glyph index", function()
+    local saved_getfont = font.getfont
+    -- 模拟 FandolSong ● 场景：characters 无 boundingbox，descriptions 按
+    -- Unicode 键存正确 bbox；glyph index 键位上是另一个（错误的）字形
+    font.getfont = function(id)
+        return {
+            size = 65536 * 10,
+            units_per_em = 1000,
+            characters = { [0x25CF] = { index = 176, width = 65536 * 10 } },
+            shared = { rawdata = { descriptions = {
+                [0x25CF] = { boundingbox = { 0, -272, 1000, 772 } },  -- 正确：中心 0.5em
+                [176]    = { boundingbox = { 55, 462, 277, 683 } },   -- 错误字形
+            } } },
+        }
+    end
+    local vc = pos.get_visual_center(0x25CF, 1)
+    -- 0.5em @ 10pt = 5pt
+    test_utils.assert_eq(vc, (0 + 1000) / 2 * (65536 * 10 / 1000))
+    font.getfont = saved_getfont
+end)
+
+-- ============================================================================
 -- position_glyph (basic test)
 -- ============================================================================
 

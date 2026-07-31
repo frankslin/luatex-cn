@@ -257,11 +257,13 @@ local function get_visual_center(char_code, font_id)
     local c = f.characters[char_code]
 
     local bbox = c.boundingbox
-    -- If not in characters table, try descriptions in raw data using character index
+    -- If not in characters table, try descriptions in raw data.
+    -- luaotfload 的 descriptions 表以 Unicode 码位为键；用 glyph index 查会
+    -- 命中另一个字形的 bbox（如 FandolSong 的 ● index=176 → 查到窄字形，
+    -- 导致装饰点整体右偏约 0.33em）。Unicode 优先，index 仅作后备。
     if not bbox and f.shared and f.shared.rawdata and f.shared.rawdata.descriptions then
         local descs = f.shared.rawdata.descriptions
-        -- Try glyph index first, then unicode (some fonts like Noto CJK use unicode as key)
-        local desc = (c.index and descs[c.index]) or descs[char_code]
+        local desc = descs[char_code] or (c.index and descs[c.index])
         if desc and desc.boundingbox then
             bbox = desc.boundingbox
         end
