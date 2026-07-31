@@ -1,6 +1,6 @@
 {
-  "manifest_version": 1,
-  "comment": "Canonical font manifest. Machine-consumable source of truth for every font the project downloads. Fonts go to font_dir (used via OSFONTDIR), never into the user's system font library. URLs must be immutable (pinned commit); sha256 is verified after download.",
+  "manifest_version": 2,
+  "comment": "Canonical font manifest. Machine-consumable source of truth for every font the project downloads. Fonts go to font_dir (used via OSFONTDIR), never into the user's system font library. URLs must be immutable (pinned commit); sha256 is verified after download. Entries with an npm source are built by merging unicode-range woff2 slices into one TTF (requires fonttools+brotli); only the tarball sha256 is pinned because the merged bytes may vary across fonttools versions.",
   "font_dir": "test/fonts",
   "fonts": [
     {
@@ -118,6 +118,28 @@
         "regression-test"
       ],
       "comment": "complete/font.tex 字体族回退链第 3 层"
+    },
+    {
+      "name": "ZhuqueFangsong",
+      "file": "ZhuqueFangsong.ttf",
+      "family": "Zhuque Fangsong (technical preview)",
+      "font_version": "0.212",
+      "format": "ttf",
+      "license": "OFL-1.1",
+      "origin": "https://github.com/TrionesType/zhuque",
+      "npm": {
+        "package": "@free-fonts/zhuque-fangsong",
+        "version": "1.0.0",
+        "tarball": "https://registry.npmjs.org/@free-fonts/zhuque-fangsong/-/zhuque-fangsong-1.0.0.tgz",
+        "sha256": "ac45c3a2613e9c3fdddf85bb00a88d92d9e877872cb8f82c98ba777d83b96848",
+        "member_glob": "package/fonts/*.woff2"
+      },
+      "urls": [],
+      "coverage": "12,882 cmap 字符（含 vert/vrt2 竖排特性，合并后保留）",
+      "required_for": [
+        "optional"
+      ],
+      "comment": "npm woff2 切片（187 片）下载后合并为单个 TTF；无 sha256 字段=只校验 tarball"
     }
   ]
 }

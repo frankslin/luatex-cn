@@ -2,6 +2,15 @@
 
 本项目的所有重大更改都将记录在此文件中。
 
+## [未发布]
+
+新增：
+- scripts/download_fonts.py 新增 --user（安装到 TEXMFHOME/fonts/truetype/luatex-cn/，免管理员权限、不进系统字体库）与 --dest DIR（放入文档项目目录），下载后可用 \setmainfont{文件名.ttf} 直接引用
+- 字体下载支持 npm woff2 切片源 — 下载 tarball 后用 fonttools 合并为单个 TTF（vert/vrt2 竖排特性保留），首个条目为朱雀仿宋 @free-fonts/zhuque-fangsong
+
+修复：
+- test/run_all.lua 失败漏报 — LuaTeX 的 os.execute 返回原始状态数字而非布尔值，此前任何单元测试失败都会被统计为通过 (#121)
+
 ## [0.3.8] - 2026-05-09
 
 新增：
