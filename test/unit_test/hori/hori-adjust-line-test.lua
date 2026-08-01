@@ -104,6 +104,24 @@ test_utils.run_test("plan compress falls back to natural when nothing can absorb
     test_utils.assert_eq(r.widths[1], 0)
 end)
 
+test_utils.run_test("plan surplus: last-line justify absorbs the parfillskip slack", function()
+    -- H5 justify：parfillskip 清零后，其伸展量作为 surplus 交间隙吸收——
+    -- 先按拉伸优先级（西文词距→中西间距），余量兜底均分
+    local gaps = {
+        { width = em(0.25), stretch = em(0.25), shrink = 0,
+          class = "western_word", effective = em(0.25) },
+        { width = 0, stretch = em(0.05), shrink = 0,
+          class = "fallback", effective = 0 },
+        { width = 0, stretch = em(0.05), shrink = 0,
+          class = "fallback", effective = 0 },
+    }
+    local r = adjline.plan(gaps, nil, {}, em(1.25))
+    -- 词距先拉满 +0.25 → 0.5em；剩 1.0em 兜底均分到两个 fallback
+    test_utils.assert_eq(r.widths[1], em(0.5))
+    test_utils.assert_near(r.widths[2], em(0.5), 2)
+    test_utils.assert_near(r.widths[2] + r.widths[3], em(1.0), 2)
+end)
+
 test_utils.run_test("plan: exact sum (rounding remainder lands in last gap)", function()
     local gaps = {}
     for _ = 1, 7 do
@@ -132,6 +150,20 @@ test_utils.run_test("line_end_blank_em: mainland end-blank / taiwan half / none"
     test_utils.assert_eq(adjline.line_end_blank_em(0x4E00, "mainland"), 0)
     -- 冒号不参与挤压（clreq 优先级表无冒号）
     test_utils.assert_eq(adjline.line_end_blank_em(0xFF1A, "mainland"), 0)
+end)
+
+test_utils.run_test("line_start_blank_em: opening bracket leading blank only", function()
+    -- clreq 行首行尾标点挤压：行首开始夹注符号可减始侧半字
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300C, "mainland"), 0.5)
+    test_utils.assert_eq(adjline.line_start_blank_em(0xFF08, "mainland"), 0.5)
+    -- 现行 punct-table 对括号按大陆口径建模（space=start，两风格同）；
+    -- 台式居中括号（space=both → 0.25）随 H7 字面重定位一并修正
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300C, "taiwan"), 0.5)
+    -- 仅开始夹注符号适用：结束符/点号/汉字/style=none 均为 0
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300D, "mainland"), 0)
+    test_utils.assert_eq(adjline.line_start_blank_em(0x3002, "mainland"), 0)
+    test_utils.assert_eq(adjline.line_start_blank_em(0x4E00, "mainland"), 0)
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300C, "none"), 0)
 end)
 
 test_utils.run_test("line_end_blank_em: hanging reclaims the whole point advance", function()

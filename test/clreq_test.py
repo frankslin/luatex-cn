@@ -425,6 +425,39 @@ def run_assertions(lines):
             f"受挤压的 {len(compressed)} 行行末标点在行内均 ≤ 半字宽",
             not bad, str(bad[:3]))
 
+    # ---- 连续标点缩减（clreq: 夹注符号连排「无论何种风格都应该」把
+    #      2 字宽缩为 1.5——两符号间隙固定为 −0.5em，行紧时可further）
+    for pair in ["》（", "）；"]:
+        line = find_line(lines, pair)
+        idx = line.text.find(pair)
+        g = line.gap_em(idx)
+        r.check("连续标点缩减", f"「{pair[0]}|{pair[1]}」固定缩减 gap={g:.3f}em ≤ -0.5",
+                g <= -0.5 + EPS)
+
+    # ---- 行首开始夹注符号缩减（clreq: 段首缩进的首行行首出现开始夹注
+    #      符号，可以缩减其始侧半字——缩进视觉上保持两字）
+    OPEN_SET = set("「『（《〈【〔")
+    margin_left = min((ln.glyphs[0].x0 for ln in lines
+                       if ln.glyphs and ln.glyphs[0].char not in OPEN_SET),
+                      default=0.0)
+    line = find_line(lines, "大学之道")
+    g0 = line.glyphs[0]
+    indent = (g0.x0 - margin_left) / g0.em
+    r.check("行首夹注符号缩减",
+            f"段首「 缩进 {indent:.3f}em ≈ 1.5（2em 缩进 − 0.5em 始侧空白）",
+            abs(indent - 1.5) <= 0.05)
+    # 行中折行产生的行首开括号（若有）：始侧空白悬出左缘 0.5em。
+    # 段首缩进起始的开括号行（off > 0.5，缩进量随字号换算）由上面的
+    # 确定性锚点覆盖，此处只查非缩进行。
+    bad = []
+    for ln in lines:
+        if ln.glyphs and ln.glyphs[0].char in OPEN_SET and ln is not line:
+            off = (ln.glyphs[0].x0 - margin_left) / ln.glyphs[0].em
+            if off < 0.5 and abs(off + 0.5) > 0.05:
+                bad.append(f"「{ln.text[:4]}」off={off:.3f}em")
+    r.check("行首夹注符号缩减", "折行行首的开括号均已缩减始侧空白", not bad,
+            str(bad[:3]))
+
     # ---- H4 行间注：注文行（小字号）存在；注文块与基文块居中对齐（clreq 词对齐）
     ann_lines = [ln for ln in lines if ln.glyphs and ln.glyphs[0].em < 8]
     r.check("行间注", f"存在小字号注文行（{len(ann_lines)} 行 ≥ 2）",

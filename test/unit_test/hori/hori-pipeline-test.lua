@@ -137,6 +137,55 @@ test_utils.run_test("quote-style=auto follows style; corner for taiwan", functio
     test_utils.assert_eq(seq[1].char, 0x300C)          -- “→「
 end)
 
+-- ============================================================================
+-- H5 段末孤字避免（clreq: 段落末行不宜只剩一个汉字）
+-- ============================================================================
+
+local function protect(nodes, setup)
+    pipeline.setup({ style = "mainland", level = "basic",
+                     cjk_latin_space = true, inter_cjk_stretch = 0.05,
+                     quote_style = "keep" })
+    if setup then pipeline.setup(setup) end
+    local head = test_utils.link_nodes(nodes)
+    head = pipeline.process(head)
+    pipeline.protect_paragraph_end(head)
+    return describe(head)
+end
+
+test_utils.run_test("orphan-char: penalty guards the break before the last hanzi", function()
+    local seq = protect({ glyph(0x4E00), glyph(0x4E8C), glyph(0x4E09) })  -- 一二三
+    -- 一 [glue] 二 [P10000] [glue] 三：末字前断点被禁
+    test_utils.assert_eq(#seq, 6)
+    test_utils.assert_eq(seq[4].id, PENALTY)
+    test_utils.assert_eq(seq[4].penalty, 10000)
+    test_utils.assert_eq(seq[5].id, GLUE)
+    test_utils.assert_eq(seq[6].char, 0x4E09)
+end)
+
+test_utils.run_test("orphan-char: trailing punctuation rides with the content char", function()
+    local seq = protect({ glyph(0x4E00), glyph(0x4E8C), glyph(0x4E09), glyph(0x3002) })
+    -- 内容末字 = 三（。为孤字附属）：三 之前的断点受禁
+    local guard = nil
+    for i, d in ipairs(seq) do
+        if d.char == 0x4E09 then
+            test_utils.assert_eq(seq[i - 1].id, GLUE)
+            guard = seq[i - 2]
+        end
+    end
+    test_utils.assert_eq(guard.id, PENALTY)
+    test_utils.assert_eq(guard.penalty, 10000)
+end)
+
+test_utils.run_test("orphan-char: single-char paragraph and western tail untouched", function()
+    local seq = protect({ glyph(0x4E00) })
+    test_utils.assert_eq(#seq, 1)
+    -- 末为西文（ab）：孤字规则只针对汉字，不插任何 penalty
+    local seq2 = protect({ glyph(0x4E00), glyph(0x61), glyph(0x62) })
+    for _, d in ipairs(seq2) do
+        test_utils.assert_false(d.id == PENALTY)
+    end
+end)
+
 test_utils.run_test("head is preserved", function()
     local g1, g2 = glyph(0x4E00), glyph(0x4E8C)
     test_utils.link_nodes({ g1, g2 })

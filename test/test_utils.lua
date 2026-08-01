@@ -158,8 +158,21 @@ node = {
         end,
         insert_before = function(head, anchor, n)
             if not n then return head end
-            n.next = anchor
-            return n
+            if head == anchor or not head then
+                n.next = anchor
+                if anchor then anchor.prev = n end
+                return n
+            end
+            -- 中段插入：找到 anchor 的前驱并双向重链
+            local curr = head
+            while curr and curr.next ~= anchor do curr = curr.next end
+            if curr then
+                curr.next = n
+                n.prev = curr
+                n.next = anchor
+                if anchor then anchor.prev = n end
+            end
+            return head
         end,
         insert_after = function(head, anchor, n)
             if not n then return head end
@@ -219,6 +232,10 @@ node = {
         getlink = function(n)
             if type(n) == "table" then return n.prev, n.next end
             return nil, nil
+        end,
+        tail = function(n)
+            while type(n) == "table" and n.next do n = n.next end
+            return n
         end,
     }
 }

@@ -157,11 +157,38 @@ test_utils.run_test("opening bracket: leading blank shrinkable before it", funct
     test_utils.assert_eq(r.glue.class, "bracket")
 end)
 
-test_utils.run_test("adjacent punctuation sums both blanks", function()
-    -- clreq: 相邻标点占 2 字宽应缩减（原则 1.5，紧凑 1）——
-    -- 。的末侧 0.5 + 「的始侧 0.5 都在这个边界上
+test_utils.run_test("adjacent punctuation: unconditional 2→1.5 reduction (clreq 连续标点)", function()
+    -- clreq: 夹注符号参与的标点连排「无论何种风格都应该」缩减——
+    -- 。末侧 0.5 + 「始侧 0.5 共 1.0 空白：固定扣 0.5（对占 1.5 字宽），
+    -- 余 0.5 仍作行内挤压容量
     local r = b(0x3002, 0x300C)  -- 。|「
-    test_utils.assert_eq(r.glue.shrink, 1.0)
+    test_utils.assert_eq(r.glue.width, -0.5)
+    test_utils.assert_eq(r.glue.shrink, 0.5)
+end)
+
+test_utils.run_test("adjacent punctuation: close+comma reduces its only half blank", function()
+    -- 」|，：」末侧无空白（close 空白在 end？——close_bracket space=end），
+    -- ，始侧无空白（mainland 逗号空白在末端）……以 ）|，验证：
+    -- ）末侧 0.5、，始侧 0 → 空白 0.5 全部固定扣除，紧靠（对占 1.5）
+    local r = b(0xFF09, 0xFF0C)  -- ）|，
+    test_utils.assert_eq(r.glue.width, -0.5)
+    test_utils.assert_eq(r.glue.shrink, 0)
+end)
+
+test_utils.run_test("adjacent punctuation: style '1' removes both blanks; natural keeps", function()
+    local r = b(0x3002, 0x300C, { adjacent_punct = "1" })  -- 。|「 → 1 字宽
+    test_utils.assert_eq(r.glue.width, -1.0)
+    test_utils.assert_eq(r.glue.shrink, 0)
+    local rn = b(0x3002, 0x300C, { adjacent_punct = "natural" })
+    test_utils.assert_eq(rn.glue.width, 0)
+    test_utils.assert_eq(rn.glue.shrink, 1.0)
+end)
+
+test_utils.run_test("adjacent punctuation: point+point pairs are NOT unconditional", function()
+    -- 无夹注符号参与（如 。|，）：clreq 无条件条款不适用，仍为纯挤压容量
+    local r = b(0x3002, 0xFF0C)  -- 。|，
+    test_utils.assert_eq(r.glue.width, 0)
+    test_utils.assert_eq(r.glue.shrink, 0.5)
 end)
 
 test_utils.run_test("taiwan centered marks contribute half per side", function()

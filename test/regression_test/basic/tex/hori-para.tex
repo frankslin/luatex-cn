@@ -1,0 +1,55 @@
+% hori-para.tex - 横排 H5 段落级排式回归测试
+% 覆盖：段末孤字避免（前行借字）、凸排、段落缩排、号数字号、
+%       段末行对齐（justify 均排 / center 居中）
+\documentclass[12pt]{article}
+\usepackage[paperwidth=10cm, paperheight=16cm, margin=1.2cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{Source Han Serif SC}[Script=CJK, Language={Chinese Simplified}]
+\usepackage{luatex-cn-hori}
+\pagestyle{empty}
+\begin{document}
+
+% 版面上渲染配置说明（本项目惯例：让看输出的人不必翻源码）
+{\small 【测试配置】宏包默认选项，另启用段末孤字避免（默认开）；文中分段演示凸排、段落缩排、号数字号与段末行对齐，各段前有说明。}
+
+{\small 【下两段】段末孤字对照——同一段文字：前者关闭避免（orphan-char=false），段末只剩孤字「格。」；后者开启（默认），自动向前行借字，末行至少两个汉字。}
+
+\horiSetup{orphan-char=false}
+测量结果为 1234 毫米，占比 95\%，温度 37℃，误差 ±3，价格 ¥1280，共计 100 件样品，编号从 001 到 999，全部合格。
+
+\horiSetup{orphan-char=true}
+测量结果为 1234 毫米，占比 95\%，温度 37℃，误差 ±3，价格 ¥1280，共计 100 件样品，编号从 001 到 999，全部合格。
+
+{\small 【下一段】凸排（首行顶格、次行起缩排两字）：}
+
+\begin{凸排}
+天玄地黄：出自千字文首句，谓天色玄而地色黄，古人以此发端述天地之道，此为凸排示例，次行起缩入两字。
+\end{凸排}
+
+{\small 【下一段】段落缩排（整段左缩两字）：}
+
+\begin{段落缩排}
+盖闻天地之数，有十二万九千六百岁为一元。此段整体较版心左缩两个汉字，常用于引文与按语，是为段落缩排。
+\end{段落缩排}
+
+{\small 【下一段】号数字号：}
+
+{\字号{三号} 三号标题文字\par}
+
+{\字号{五号} 五号为书刊正文常用字号。\par}
+
+{\字号{小五} 小五多用于注文与脚注。\par}
+
+{\small 【下一段】last-line=justify：clreq 规定正文段落末行不均排（默认 left 即是）；列表、名单、表格标题求体例一致时末行亦均排，此选项即该体例：}
+
+\horiSetup{last-line=justify}
+剑号巨阙，珠称夜光。果珍李柰，菜重芥姜。海咸河淡，鳞潜羽翔，此段末行均排。
+
+{\small 【下一段】段末行居中（center）：}
+
+\horiSetup{last-line=center}
+龙师火帝，鸟官人皇。始制文字，乃服衣裳，此段末行居中。
+
+\horiSetup{last-line=left}
+
+\end{document}

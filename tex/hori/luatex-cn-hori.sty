@@ -58,6 +58,12 @@
 \tl_new:N \l__luatexcn_hori_lineendpunct_tl
 \bool_new:N \l__luatexcn_hori_hanging_bool
 \tl_new:N \l__luatexcn_hori_quotestyle_tl
+\bool_new:N \l__luatexcn_hori_orphanchar_bool
+\tl_new:N \l__luatexcn_hori_lastline_tl
+\tl_new:N \l__luatexcn_hori_adjacentpunct_tl
+\tl_new:N \l__luatexcn_hori_linestartbracket_tl
+\int_new:N \l__luatexcn_hori_widowpenalty_int
+\int_new:N \l__luatexcn_hori_clubpenalty_int
 \fp_new:N \l__luatexcn_hori_rubysize_fp
 \fp_new:N \l__luatexcn_hori_rubygap_fp
 
@@ -107,12 +113,38 @@
     hanging-punct .bool_set:N = \l__luatexcn_hori_hanging_bool,
     hanging-punct .initial:n = { false },
 
+    % 连续标点缩减 (clreq: 夹注符号连排「无论何种风格都应该」把 2 字宽
+    % 缩为 1.5；风格可进一步到 1). natural = 仅按行紧度挤压
+    adjacent-punct .choices:nn = { 1.5 , 1 , natural }
+      { \tl_set:Nn \l__luatexcn_hori_adjacentpunct_tl { #1 } },
+    adjacent-punct .initial:n = { 1.5 },
+
+    % 行首开始夹注符号 (clreq: 可以缩减始侧半字，含段首缩进首行)
+    line-start-bracket .choices:nn = { trim , natural }
+      { \tl_set:Nn \l__luatexcn_hori_linestartbracket_tl { #1 } },
+    line-start-bracket .initial:n = { trim },
+
     % H1: 引号体例转换 (clreq: 简体横排弯引号先双后单 / 台湾传统引号
     % 先单后双). 默认 keep 不改动来稿用字；auto 按 style 选择；
     % curly/corner 显式指定目标体例（嵌套深度经一一映射保持）。
     quote-style .choices:nn = { keep , auto , curly , corner }
       { \tl_set:Nn \l__luatexcn_hori_quotestyle_tl { #1 } },
     quote-style .initial:n = { keep },
+
+    % H5: 段末孤字避免 (clreq: 段落最后一行不宜只剩一个汉字——前行借字)
+    orphan-char .bool_set:N = \l__luatexcn_hori_orphanchar_bool,
+    orphan-char .initial:n = { true },
+
+    % H5: 段末行对齐 (clreq 单行对齐): left(默认)|center|right|justify
+    last-line .choices:nn = { left , center , right , justify }
+      { \tl_set:Nn \l__luatexcn_hori_lastline_tl { #1 } },
+    last-line .initial:n = { left },
+
+    % H5: 孤行 (clreq: 避免页首孤行/页尾孤行；10000=禁止)
+    widow-penalty .int_set:N = \l__luatexcn_hori_widowpenalty_int,
+    widow-penalty .initial:n = { 10000 },
+    club-penalty .int_set:N = \l__luatexcn_hori_clubpenalty_int,
+    club-penalty .initial:n = { 10000 },
 
     % H4: annotation size ratio / row gap (defaults from shared/ruby-metrics)
     ruby-size .fp_set:N = \l__luatexcn_hori_rubysize_fp,
@@ -136,6 +168,10 @@
           line_end_punct = '\l__luatexcn_hori_lineendpunct_tl',
           hanging_punct = \bool_if:NTF \l__luatexcn_hori_hanging_bool { true } { false },
           quote_style = '\l__luatexcn_hori_quotestyle_tl',
+          avoid_orphan_char = \bool_if:NTF \l__luatexcn_hori_orphanchar_bool { true } { false },
+          last_line = '\l__luatexcn_hori_lastline_tl',
+          adjacent_punct = '\l__luatexcn_hori_adjacentpunct_tl',
+          line_start_bracket = '\l__luatexcn_hori_linestartbracket_tl',
         })
       }
   }
@@ -291,6 +327,50 @@
 \NewCommandCopy { \EvenSpread } { \均排 }
 
 % ============================================================================
+% H5: 段落级排式
+% ============================================================================
+
+% 凸排（clreq: 首行顶格、第二行起固定量缩排——词典释义、参考文献等）。
+% 环境内每个段落生效；缩排量默认 2em。
+\NewDocumentEnvironment { 凸排 } { O{2em} }
+  {
+    \par
+    \dim_set:Nn \parindent { 0pt }
+    \everypar { \hangindent #1 \hangafter 1 }
+  }
+  { \par }
+
+% 段落缩排（clreq: 整段较版心缩进）。可选参数：左缩、右缩（默认 2em/0pt）。
+\NewDocumentEnvironment { 段落缩排 } { O{2em} O{0pt} }
+  {
+    \par
+    \dim_add:Nn \leftskip { #1 }
+    \dim_add:Nn \rightskip { #2 }
+  }
+  { \par }
+
+% 号数字号（clreq「字号」节的号数制；表在 shared/luatex-cn-type-sizes.lua）。
+% \字号{五号} / \字号{小四}[1.7]（可选参数为行距倍数，默认取共享层常量）
+\msg_new:nnn { luatex-cn-hori } { unknown-zihao }
+  { 未知号数「#1」——可用值见 shared/luatex-cn-type-sizes.lua }
+
+\NewDocumentCommand { \字号 } { m o }
+  {
+    \lua_now:e
+      {
+        require('shared.luatex-cn-type-sizes').tex_lookup(
+          '\luaescapestring{#1}' \IfValueT {#2} { , #2 } )
+      }
+    \tl_if_empty:NTF \l__luatexcn_hori_zihao_size_tl
+      { \msg_error:nnn { luatex-cn-hori } { unknown-zihao } { #1 } }
+      {
+        \fontsize { \l__luatexcn_hori_zihao_size_tl }
+                  { \l__luatexcn_hori_zihao_base_tl }
+        \selectfont
+      }
+  }
+
+% ============================================================================
 % Activation
 % ============================================================================
 
@@ -305,4 +385,7 @@
       {
         \dim_set:Nn \parindent { \l__luatexcn_hori_parindent_tl }
       }
+    % H5 孤行控制（clreq: 避免页首孤行 / 页尾孤行）
+    \int_set:Nn \widowpenalty { \l__luatexcn_hori_widowpenalty_int }
+    \int_set:Nn \clubpenalty { \l__luatexcn_hori_clubpenalty_int }
   }
