@@ -146,6 +146,19 @@ python3 test/clreq_test.py yourfile.tex    # 检查其他横排文档
 - **CI**：`.github/workflows/test.yml` 会对每个 PR 及 main/dev 的 push
   先跑 unit test 再跑 regression test，本地通过后 CI 应当同样通过。
 
+### 示例重建（Examples Rebuild）
+```bash
+# 渲染算法一改，示例/ 下的 PDF 与预览图就全部过期。清单驱动一键重建：
+python3 scripts/build/build_examples.py            # 重建 示例/ 全部 PDF + PNG
+python3 scripts/build/build_examples.py --check    # 只报告哪些页变了，不写文件
+python3 scripts/build/build_examples.py --only 红楼梦
+python3 scripts/build/build_examples.py --all      # 含 全书复刻/（92 页，慢）
+python3 scripts/build/build_examples.py --list     # 看清单：tex → PDF → 第几页出哪张图
+```
+- 清单在脚本顶部的 `DOCS`：新增示例时在这里加一条，不要手工导图。
+- 素材与底本扫描（`文渊阁宝印.png`、`ref-*.png`、`page_*.jpg`）永不重写。
+- 预览图统一 150 dpi；字体同回归测试经 `OSFONTDIR` 指向 `test/fonts/`。
+
 ### 编译测试
 ```bash
 # 在对应套件的 tex 目录下编译
