@@ -36,7 +36,7 @@ CTAN: [v0.3.8](https://ctan.org/pkg/luatex-cn) | GitHub Release: [v0.3.8](https:
 | :---: | :---: |
 | ![卷十六第二页](示例/首页展示/juan16-p2.png) | ![卷十六第一页](示例/首页展示/juan16-p1.png) |
 
-> [查看源码](示例/史记卷六·现代/卷十六.tex) | [查看 PDF](示例/史记卷六·现代/卷十六.pdf)
+> [查看源码](示例/史记卷十六·现代/卷十六.tex) | [查看 PDF](示例/史记卷十六·现代/卷十六.pdf)
 
 更多示例请查看 [示例目录](示例/README.md) 或 [Wiki 示例页](https://github.com/open-guji/luatex-cn/wiki/Examples)。
 
