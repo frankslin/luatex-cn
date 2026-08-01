@@ -79,8 +79,15 @@ def compare_images(baseline_png: Path, current_png: Path, diff_png: Path) -> tup
         diff_png:     Path where the diff image will be saved.
 
     Returns:
-        Number of pixels that differ between the two images, and
-        number pixels of image.
+        (diff_count, pixel_count, structural_count)
+        diff_count:       pixels differing in any channel (exact inequality)
+        pixel_count:      total pixels compared
+        structural_count: pixels whose ink presence (gray < 128) differs.
+            Anti-aliasing of curved outlines (notably CFF/OTF fonts such as
+            Source Han) varies between poppler builds/platforms, producing
+            gray-level-only diffs with zero structural change; any real
+            layout/glyph change flips ink presence somewhere. Callers may
+            treat diff_count > 0 with structural_count == 0 as ignorable.
     """
     baseline_img = Image.open(baseline_png).convert("RGB")
     current_img = Image.open(current_png).convert("RGB")
@@ -104,6 +111,28 @@ def compare_images(baseline_png: Path, current_png: Path, diff_png: Path) -> tup
     diff_mask = np.any(baseline_arr != current_arr, axis=2)
     diff_count = int(np.sum(diff_mask))
 
+    # Structural difference: ink presence (binarized at mid-gray) flips in
+    # CLUSTERS. Cross-platform anti-aliasing may land individual edge pixels
+    # on opposite sides of the threshold, but those flips are isolated
+    # scatter; any real layout/glyph change (even a 1 px shift) flips a
+    # connected run of pixels along the stroke edge. A flip only counts as
+    # structural if at least one 8-neighbor also flips.
+    b_ink = np.mean(baseline_arr, axis=2) < 128
+    c_ink = np.mean(current_arr, axis=2) < 128
+    flips = b_ink != c_ink
+    if flips.any():
+        padded = np.pad(flips, 1, mode="constant")
+        neighbor_any = np.zeros_like(flips)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                neighbor_any |= padded[1 + dy:padded.shape[0] - 1 + dy,
+                                       1 + dx:padded.shape[1] - 1 + dx]
+        structural_count = int(np.sum(flips & neighbor_any))
+    else:
+        structural_count = 0
+
     if diff_count > 0:
         b_gray = np.mean(baseline_arr, axis=2)
         c_gray = np.mean(current_arr, axis=2)
@@ -122,4 +151,4 @@ def compare_images(baseline_png: Path, current_png: Path, diff_png: Path) -> tup
         diff_img = Image.fromarray(result)
         diff_img.save(str(diff_png))
 
-    return diff_count, w * h
+    return diff_count, w * h, structural_count

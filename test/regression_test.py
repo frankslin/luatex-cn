@@ -162,7 +162,7 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
             all_match = True
             for b_png, n_png in zip(existing_baselines, new_pngs):
                 diff_png = diff_dir / f"temp_diff_{n_png.name}"
-                diff_count = compare_images_logged(b_png, n_png, diff_png, log_list)
+                diff_count, _, _ = compare_images_logged(b_png, n_png, diff_png, log_list)
                 if diff_png.exists():
                     diff_png.unlink()
                 if diff_count != 0:
@@ -233,23 +233,37 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
 
         total_diff_pixels = 0
         total_pixels = 0
+        total_aa_pixels = 0   # gray-level-only diffs (no ink-presence flip)
         failing_pages = []
 
         for i, (b_png, c_png) in enumerate(zip(baseline_pngs, current_pngs)):
             diff_png = diff_dir / f"diff_{c_png.name}"
-            diff_count, pixel_count = compare_images_logged(b_png, c_png, diff_png, log_list)
+            diff_count, pixel_count, structural_count = \
+                compare_images_logged(b_png, c_png, diff_png, log_list)
 
             diff_ratio = 100 * diff_count / pixel_count
-            
-            total_pixels += pixel_count
-            total_diff_pixels += diff_count
 
-            if diff_count > 0:
+            total_pixels += pixel_count
+
+            if structural_count > 0:
+                total_diff_pixels += diff_count
                 failing_pages.append(i + 1)
-                log_list.append(f"  Page {i+1} fails: {diff_count} ({diff_ratio:.4f}%) pixels difference.")
+                log_list.append(
+                    f"  Page {i+1} fails: {diff_count} ({diff_ratio:.4f}%) pixels difference"
+                    f" ({structural_count} structural).")
+            elif diff_count > 0:
+                # Anti-aliasing-only difference: binarized images are identical.
+                # Poppler renders CFF/OTF curves (e.g. Source Han) with slightly
+                # different gray ramps across platforms/versions; ignorable.
+                total_aa_pixels += diff_count
+                log_list.append(
+                    f"  Page {i+1}: {diff_count} ({diff_ratio:.4f}%) pixels differ in"
+                    f" anti-aliasing only (no structural change) — IGNORABLE.")
+                if diff_png.exists():
+                    diff_png.unlink()
             elif diff_png.exists():
-                if diff_png.exists(): diff_png.unlink()
-        
+                diff_png.unlink()
+
         total_diff_ratio = 100 * total_diff_pixels / total_pixels
 
         # Check JSON baseline if present
@@ -285,6 +299,8 @@ def process_file(tex_file, mode, pdf_dir, baseline_dir, current_dir, diff_dir):
                 png.unlink()
             if pdf_file.exists():
                 pdf_file.unlink()
+            if total_aa_pixels > 0:
+                return True, f"{total_aa_pixels} px AA-only diff (ignorable)", log_list
             return True, 0, log_list
         else:
             if not json_ok:

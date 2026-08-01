@@ -8,6 +8,10 @@ local tests = {
     "test/unit_test/shared/adjust-test.lua",
     "test/unit_test/shared/kinsoku-test.lua",
 
+    -- Horizontal backend (clreq H1)
+    "test/unit_test/hori/hori-spacing-test.lua",
+    "test/unit_test/hori/hori-pipeline-test.lua",
+
     -- Util layer (pure functions, no complex deps)
     "test/unit_test/util/utils-test.lua",
     "test/unit_test/util/text-utils-test.lua",
