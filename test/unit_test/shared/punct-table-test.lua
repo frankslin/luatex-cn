@@ -254,4 +254,20 @@ test_utils.run_test("legacy_type matches current engine classification", functio
     test_utils.assert_nil(pt.legacy_type(0x2047))
 end)
 
+test_utils.run_test("quote_convert: nesting depth and role preserved (clreq 引号体例)", function()
+    -- 台式（先单后双）→ 简体弯引号（先双后单）：外层对外层、内层对内层
+    test_utils.assert_eq(pt.quote_convert(0x300C, "curly"), 0x201C)  -- 「→“
+    test_utils.assert_eq(pt.quote_convert(0x300D, "curly"), 0x201D)  -- 」→”
+    test_utils.assert_eq(pt.quote_convert(0x300E, "curly"), 0x2018)  -- 『→‘
+    test_utils.assert_eq(pt.quote_convert(0x300F, "curly"), 0x2019)  -- 』→’
+    -- 反向
+    test_utils.assert_eq(pt.quote_convert(0x201C, "corner"), 0x300C)
+    test_utils.assert_eq(pt.quote_convert(0x2019, "corner"), 0x300F)
+    -- 已是目标体例 / 非引号字符：不转换
+    test_utils.assert_nil(pt.quote_convert(0x201C, "curly"))
+    test_utils.assert_nil(pt.quote_convert(0x300C, "corner"))
+    test_utils.assert_nil(pt.quote_convert(0x4E00, "curly"))
+    test_utils.assert_nil(pt.quote_convert(0x300C, "keep"))
+end)
+
 print("All punct-table tests passed.")

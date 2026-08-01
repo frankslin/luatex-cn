@@ -134,4 +134,15 @@ test_utils.run_test("line_end_blank_em: mainland end-blank / taiwan half / none"
     test_utils.assert_eq(adjline.line_end_blank_em(0xFF1A, "mainland"), 0)
 end)
 
+test_utils.run_test("line_end_blank_em: hanging reclaims the whole point advance", function()
+    -- 行尾点号悬挂（opt-in）：点号整字悬于版口外
+    test_utils.assert_eq(adjline.line_end_blank_em(0x3002, "mainland", true), 1)
+    test_utils.assert_eq(adjline.line_end_blank_em(0xFF0C, "mainland", true), 1)
+    -- 仅点号悬挂：结束括号仍按半字挤压
+    test_utils.assert_eq(adjline.line_end_blank_em(0x300D, "mainland", true), 0.5)
+    -- 非标点不受影响；style=none 不悬挂
+    test_utils.assert_eq(adjline.line_end_blank_em(0x4E00, "mainland", true), 0)
+    test_utils.assert_eq(adjline.line_end_blank_em(0x3002, "none", true), 0)
+end)
+
 print("All hori-adjust-line tests passed.")

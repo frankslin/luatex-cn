@@ -347,6 +347,40 @@ function M.vert_rotate(char)
     return (e and e.vert_rotate) or false
 end
 
+-- ============================================================================
+-- Quote style conversion (clreq 引号体例)
+-- ============================================================================
+
+-- clreq: 横排简体中文用弯引号，嵌套体例先双后单（“…‘…’…”）；
+-- 台湾用传统引号，先单后双（「…『…』…」）。两套引号按嵌套深度一一对应，
+-- 逐字映射即完成体例转换（外层对外层、内层对内层）。
+local TO_CURLY = {
+    [0x300C] = 0x201C, -- 「 → “
+    [0x300D] = 0x201D, -- 」 → ”
+    [0x300E] = 0x2018, -- 『 → ‘
+    [0x300F] = 0x2019, -- 』 → ’
+}
+local TO_CORNER = {
+    [0x201C] = 0x300C, -- “ → 「
+    [0x201D] = 0x300D, -- ” → 」
+    [0x2018] = 0x300E, -- ‘ → 『
+    [0x2019] = 0x300F, -- ’ → 』
+}
+
+--- Convert a quote codepoint to the target style, preserving nesting depth
+-- and open/close role.
+-- @param char (number) Unicode codepoint
+-- @param target (string) "curly" (简体横排) | "corner" (台湾)
+-- @return (number|nil) converted codepoint, or nil if no conversion applies
+function M.quote_convert(char, target)
+    if target == "curly" then
+        return TO_CURLY[char]
+    elseif target == "corner" then
+        return TO_CORNER[char]
+    end
+    return nil
+end
+
 -- Legacy six-type mapping used by the current vertical engine
 -- (open/close/fullstop/comma/middle/nobreak). For the P1 migration:
 -- luatex-cn-core-punct.lua derives its CL_* sets from this.

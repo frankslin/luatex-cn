@@ -56,6 +56,8 @@
 \tl_new:N \l__luatexcn_hori_parindent_tl
 \bool_new:N \l__luatexcn_hori_lineadjust_bool
 \tl_new:N \l__luatexcn_hori_lineendpunct_tl
+\bool_new:N \l__luatexcn_hori_hanging_bool
+\tl_new:N \l__luatexcn_hori_quotestyle_tl
 \fp_new:N \l__luatexcn_hori_rubysize_fp
 \fp_new:N \l__luatexcn_hori_rubygap_fp
 
@@ -100,6 +102,18 @@
       { \tl_set:Nn \l__luatexcn_hori_lineendpunct_tl { #1 } },
     line-end-punct .initial:n = { compress },
 
+    % H2: 行尾点号悬挂 (clreq, opt-in). 行末点号整字悬于版口外；
+    % 港台式点号居中不宜悬挂，故默认关闭。
+    hanging-punct .bool_set:N = \l__luatexcn_hori_hanging_bool,
+    hanging-punct .initial:n = { false },
+
+    % H1: 引号体例转换 (clreq: 简体横排弯引号先双后单 / 台湾传统引号
+    % 先单后双). 默认 keep 不改动来稿用字；auto 按 style 选择；
+    % curly/corner 显式指定目标体例（嵌套深度经一一映射保持）。
+    quote-style .choices:nn = { keep , auto , curly , corner }
+      { \tl_set:Nn \l__luatexcn_hori_quotestyle_tl { #1 } },
+    quote-style .initial:n = { keep },
+
     % H4: annotation size ratio / row gap (defaults from shared/ruby-metrics)
     ruby-size .fp_set:N = \l__luatexcn_hori_rubysize_fp,
     ruby-size .initial:x = { \c__luatexcn_ruby_size_default_tl },
@@ -120,6 +134,8 @@
           inter_cjk_stretch = \l__luatexcn_hori_stretch_tl,
           line_adjust = \bool_if:NTF \l__luatexcn_hori_lineadjust_bool { true } { false },
           line_end_punct = '\l__luatexcn_hori_lineendpunct_tl',
+          hanging_punct = \bool_if:NTF \l__luatexcn_hori_hanging_bool { true } { false },
+          quote_style = '\l__luatexcn_hori_quotestyle_tl',
         })
       }
   }
@@ -249,6 +265,30 @@
 \NewDocumentCommand { \ruby } { m m } { \__luatexcn_hori_ruby:nn { #1 } { #2 } }
 \NewCommandCopy { \拼音 } { \ruby }
 \NewCommandCopy { \对照 } { \ruby }
+
+% ============================================================================
+% 均排 (clreq: 字均匀分布于指定宽度，两端字紧贴边界——用于标题、表格
+% 单元格等；行级的拉伸兜底均分由 H2 的分配器完成)
+% ============================================================================
+
+\bool_new:N \l__luatexcn_hori_evenspread_first_bool
+
+\NewDocumentCommand { \均排 } { O{\linewidth} m }
+  {
+    \mode_leave_vertical:
+    \hbox_to_wd:nn { #1 }
+      {
+        \bool_set_true:N \l__luatexcn_hori_evenspread_first_bool
+        \tl_map_inline:nn { #2 }
+          {
+            \bool_if:NTF \l__luatexcn_hori_evenspread_first_bool
+              { \bool_set_false:N \l__luatexcn_hori_evenspread_first_bool }
+              { \skip_horizontal:n { 0pt plus 1fil } }
+            ##1
+          }
+      }
+  }
+\NewCommandCopy { \EvenSpread } { \均排 }
 
 % ============================================================================
 % Activation

@@ -31,6 +31,8 @@ DEFAULT_TEX = os.path.join(
     REPO_ROOT, "test", "regression_test", "basic", "tex", "hori.tex")
 STRESS_TEX = os.path.join(
     REPO_ROOT, "test", "clreq_test", "stress-unbreakable.tex")
+TAIWAN_TEX = os.path.join(
+    REPO_ROOT, "test", "regression_test", "basic", "tex", "hori-taiwan.tex")
 FONTS_DIR = os.path.join(REPO_ROOT, "test", "fonts")
 
 # 坐标/宽度舍入容差（em）。sp 取整与 PDF 三位小数远小于此。
@@ -396,8 +398,11 @@ def run_assertions(lines):
     # 均调成半字）。集合必须完整——漏掉的字符若真被挤压，其 x1 会超出文本
     # 右缘 0.5em，把 margin 估计值抬高半字，令全部断言失真。
     PUNCT_END = set("，。、；！？」』）》〉】〕")
+    # 右缘样本进一步排除所有以标点结尾的行（含不可挤压的冒号等）：
+    # 这类行可能因排版特殊（如 overfull 容忍）而略越界，不适合当基准。
+    MARGIN_EXCLUDE = PUNCT_END | set("：·—…～／")
     margin = max((ln.glyphs[-1].x1 for ln in lines
-                  if ln.glyphs and ln.glyphs[-1].char not in PUNCT_END),
+                  if ln.glyphs and ln.glyphs[-1].char not in MARGIN_EXCLUDE),
                  default=0.0)
     # 受挤压行的可观测特征：末字空白被负 kern 回收后，其 advance 越出文本
     # 右缘（x1 > M）。数量下限是回归锁——若 H2 失效，标点行全部回到
@@ -504,6 +509,58 @@ def run_stress_assertions(lines):
     return r
 
 
+def run_taiwan_assertions(lines):
+    """style=taiwan 专属断言（hori-taiwan.tex，TW-Kai 台式居中字面）。"""
+    r = Reporter()
+    text = "".join(ln.text for ln in lines)
+
+    # ---- 引号体例（clreq: 台湾用传统引号，先单后双）：
+    #      quote-style=auto + style=taiwan 把来稿弯引号逐字转换，嵌套保持
+    r.check("引号体例", "输出含传统引号「」『』（弯引号已转换）",
+            all(c in text for c in "「」『』"))
+    r.check("引号体例", "输出不含弯引号",
+            not any(c in text for c in "“”‘’"))
+
+    # ---- 台式？！固定一字宽（clreq: 横排台式问号叹号不调整）：
+    #      advance = 1em，且其后空隙不为负（未被当作可挤空白）
+    seen, fixed_ok = 0, True
+    for ln in lines:
+        for i, g in enumerate(ln.glyphs):
+            if g.char in "？！":
+                seen += 1
+                if abs((g.x1 - g.x0) / g.em - 1.0) > EPS:
+                    fixed_ok = False
+                if i + 1 < len(ln.glyphs) and ln.gap_em(i) < -EPS:
+                    fixed_ok = False
+    r.check("台式固定标点", f"？！共 {seen} 处（≥4），advance=1em 且旁侧无压缩",
+            seen >= 4 and fixed_ok)
+
+    # ---- 行首禁则
+    FORBID_START = set("，。、：；！？」』）……")
+    bad = [ln.text[:6] for ln in lines if ln.text and ln.text[0] in FORBID_START]
+    r.check("行首禁则", f"{len(lines)} 行无行首禁字符", not bad, str(bad[:3]))
+
+    # ---- 行末标点挤压：台式点号居中，末端空白仅半侧（0.25em）——
+    #      受挤压行的行末标点在行内占 1 − 0.25 = 0.75em
+    PUNCT_END = set("，。、；！？」』）")
+    margin = max((ln.glyphs[-1].x1 for ln in lines
+                  if ln.glyphs and ln.glyphs[-1].char not in PUNCT_END),
+                 default=0.0)
+    compressed, bad2 = [], []
+    for ln in lines:
+        if not ln.glyphs or ln.glyphs[-1].char not in "，。、；":
+            continue
+        g = ln.glyphs[-1]
+        if g.x1 - margin >= 0.1 * g.em:
+            compressed.append(ln)
+            occupied = (margin - g.x0) / g.em
+            if occupied > 0.75 + EPS:
+                bad2.append(f"「…{ln.text[-4:]}」占 {occupied:.3f}em")
+    r.check("行末标点挤压", f"台式受挤压行（{len(compressed)} 行 ≥ 2）占位 ≤ 0.75em",
+            len(compressed) >= 2 and not bad2, str(bad2[:3]))
+    return r
+
+
 def run_doc(name, tex, assert_fn, min_lines):
     with tempfile.TemporaryDirectory() as tmp:
         pdf = compile_tex(tex, tmp)
@@ -528,6 +585,8 @@ def main():
             run_doc("hori.tex 基础用例", DEFAULT_TEX, run_assertions, 5),
             run_doc("stress-unbreakable.tex 压力用例", STRESS_TEX,
                     run_stress_assertions, 20),
+            run_doc("hori-taiwan.tex 台式用例", TAIWAN_TEX,
+                    run_taiwan_assertions, 8),
         ]
 
     passed = sum(r.passed for r in reporters)

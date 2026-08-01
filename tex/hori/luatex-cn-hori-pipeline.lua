@@ -19,6 +19,7 @@
 local spacing = require("hori.luatex-cn-hori-spacing")
 local adjust_line = require("hori.luatex-cn-hori-adjust-line")
 local linemark = require("hori.luatex-cn-hori-linemark")
+local punct_table = require("shared.luatex-cn-punct-table")
 
 local pipeline = {}
 
@@ -43,11 +44,35 @@ local opts = {
     inter_cjk_stretch = 0.05,
     line_adjust = true,          -- H2 priority redistribution on/off
     line_end_punct = "compress", -- "compress" | "natural"
+    quote_style = "keep",        -- "keep" | "auto" | "curly" | "corner"
+    hanging_punct = false,       -- 行尾点号悬挂 (opt-in)
 }
+
+-- Resolved quote conversion target ("curly"/"corner"/nil). clreq 引号体例:
+-- 简体横排用弯引号（先双后单），台湾用传统引号（先单后双）。默认 keep
+-- （不改动来稿用字，体例转换须用户显式开启）；auto 按 style 选择。
+local quote_target = nil
+
+local function resolve_quote_target()
+    local q = opts.quote_style
+    if q == "curly" or q == "corner" then
+        quote_target = q
+    elseif q == "keep" then
+        quote_target = nil
+    else -- auto
+        if opts.style == "taiwan" then
+            quote_target = "corner"
+        elseif opts.style == "mainland" then
+            quote_target = "curly"
+        else
+            quote_target = nil
+        end
+    end
+end
 
 --- Configure the pipeline.
 -- @param o (table) { style, level, cjk_latin_space, inter_cjk_stretch,
---   line_adjust, line_end_punct }
+--   line_adjust, line_end_punct, quote_style, hanging_punct }
 function pipeline.setup(o)
     if not o then return end
     if o.style ~= nil then opts.style = o.style end
@@ -56,6 +81,9 @@ function pipeline.setup(o)
     if o.inter_cjk_stretch ~= nil then opts.inter_cjk_stretch = o.inter_cjk_stretch end
     if o.line_adjust ~= nil then opts.line_adjust = o.line_adjust end
     if o.line_end_punct ~= nil then opts.line_end_punct = o.line_end_punct end
+    if o.quote_style ~= nil then opts.quote_style = o.quote_style end
+    if o.hanging_punct ~= nil then opts.hanging_punct = o.hanging_punct end
+    resolve_quote_target()
 end
 
 -- Interword space glue subtypes (LuaTeX: spaceskip / xspaceskip; ordinary
@@ -119,6 +147,14 @@ function pipeline.process(head_d)
         elseif math_level > 0 then
             -- inside math: ignore everything
         elseif id == GLYPH then
+            -- Opt-in quote style conversion (clreq 引号体例). Depth/role are
+            -- preserved by the shared 1:1 map, so boundary decisions below
+            -- see the converted character.
+            if quote_target then
+                local c0 = D.getfield(curr, "char")
+                local conv = c0 and punct_table.quote_convert(c0, quote_target)
+                if conv then D.setfield(curr, "char", conv) end
+            end
             if prev_glyph and not blocked then
                 local a = D.getfield(prev_glyph, "char")
                 local c = D.getfield(curr, "char")
