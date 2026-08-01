@@ -3,7 +3,10 @@
   "comment": "Canonical font manifest. Machine-consumable source of truth for every font the project downloads. Fonts go to font_dir (used via OSFONTDIR), never into the user's system font library. URLs must be immutable (pinned commit); sha256 is verified after download. Entries with an npm source are built by merging unicode-range woff2 slices into one TTF (requires fonttools+brotli); only the tarball sha256 is pinned because the merged bytes may vary across fonttools versions. aliases group multiple member fonts under one family name for \\设置字体族 (must mirror fontdetect.registry in tex/fonts/luatex-cn-font-autodetect.lua).",
   "font_dir": "test/fonts",
   "aliases": {
-    "Jigmo": ["Jigmo.ttf", "Jigmo2.ttf"]
+    "Jigmo": [
+      "Jigmo.ttf",
+      "Jigmo2.ttf"
+    ]
   },
   "fonts": [
     {
@@ -143,6 +146,28 @@
         "optional"
       ],
       "comment": "npm woff2 切片（187 片）下载后合并为单个 TTF；无 sha256 字段=只校验 tarball"
+    },
+    {
+      "name": "SourceHanSerifSC",
+      "file": "SourceHanSerifSC-Regular.otf",
+      "family": "Source Han Serif SC",
+      "font_version": "2.003",
+      "format": "otf",
+      "size": 24543332,
+      "sha256": "78aa7a328fd974df2d688c8a9fd74a33d8334dfa84ab24d9d11efb2ffc464117",
+      "license": "OFL-1.1",
+      "origin": "https://github.com/adobe-fonts/source-han-serif",
+      "archive": {
+        "url": "https://github.com/adobe-fonts/source-han-serif/releases/download/2.003R/09_SourceHanSerifSC.zip",
+        "sha256": "8f633642eedf9bf23ab3336faa3d03ce1b56c14d654cd25752bc829c05f79f0d",
+        "member": "OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf"
+      },
+      "urls": [],
+      "coverage": "简体中文子集（GB 18030）；大陆式标点字面（偏靠始端）",
+      "required_for": [
+        "regression-test"
+      ],
+      "comment": "横排 clreq 测试（basic/hori.tex）：大陆偏靠式标点需要 SC 字面，TW-Kai 标点为台式居中不适用"
     }
   ]
 }

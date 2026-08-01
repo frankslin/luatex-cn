@@ -1,0 +1,128 @@
+% Copyright 2026 Open-Guji (https://github.com/open-guji)
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+%
+%     http://www.apache.org/licenses/LICENSE-2.0
+%
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License.
+
+% luatex-cn-hori.sty - Horizontal Chinese typesetting per W3C clreq (H1).
+% Inserts kinsoku penalties and adjustable glues (inter-CJK break points,
+% CJK-Western spacing) in pre_linebreak_filter, driven by the shared clreq
+% rule kernel in tex/shared/. Usable with any horizontal document class.
+%
+% Design: docs/CLREQ-HORIZONTAL-PLAN.md (H1)
+% Rule kernel contract: ai_must_read/clreq-shared-core.md
+
+\NeedsTeXFormat{LaTeX2e}
+\RequirePackage{expl3}
+\RequirePackage{l3keys2e}
+\ProvidesExplPackage {luatex-cn-hori} {2026/07/31} {0.1.0}
+  {Horizontal Chinese typesetting per clreq}
+
+\sys_if_engine_luatex:F
+  {
+    \msg_new:nnn { luatex-cn-hori } { engine }
+      { luatex-cn-hori~requires~LuaTeX.~Loading~aborted. }
+    \msg_error:nn { luatex-cn-hori } { engine }
+  }
+
+% HR2: luatexja performs its own CJK spacing / kinsoku in the same callbacks
+% (JLReq semantics); running both would double-process every paragraph.
+\@ifpackageloaded { luatexja }
+  {
+    \msg_new:nnn { luatex-cn-hori } { luatexja-conflict }
+      { luatex-cn-hori~and~luatexja~(also~loaded~by~ctex~under~LuaLaTeX)~
+        are~mutually~exclusive:~both~insert~CJK~spacing~and~line-break~
+        penalties.~Load~only~one~of~them. }
+    \msg_error:nn { luatex-cn-hori } { luatexja-conflict }
+  }
+  { }
+
+% ============================================================================
+% Options
+% ============================================================================
+
+\tl_new:N \l__luatexcn_hori_style_tl
+\tl_new:N \l__luatexcn_hori_level_tl
+\bool_new:N \l__luatexcn_hori_cjkspace_bool
+\tl_new:N \l__luatexcn_hori_stretch_tl
+\tl_new:N \l__luatexcn_hori_parindent_tl
+
+\keys_define:nn { luatexcn / hori }
+  {
+    % Punctuation style preset: mainland | taiwan | none
+    style .choices:nn = { mainland , taiwan , none }
+      { \tl_set:Nn \l__luatexcn_hori_style_tl { #1 } },
+    style .initial:n = { mainland },
+
+    % Kinsoku level: none | basic | gb | strict (clreq: basic recommended)
+    kinsoku-level .choices:nn = { none , basic , gb , strict }
+      { \tl_set:Nn \l__luatexcn_hori_level_tl { #1 } },
+    kinsoku-level .initial:n = { basic },
+
+    % CJK-Western 1/4 em spacing on/off
+    cjk-latin-space .bool_set:N = \l__luatexcn_hori_cjkspace_bool,
+    cjk-latin-space .initial:n = { true },
+
+    % Inter-CJK stretch of last resort (em ratio)
+    inter-cjk-stretch .tl_set:N = \l__luatexcn_hori_stretch_tl,
+    inter-cjk-stretch .initial:n = { 0.05 },
+
+    % First-line indent (clreq: 段首缩排以两个汉字的空间为标准).
+    % Applied at \begin{document} so 1em = the main CJK font size.
+    % Set to `keep' to leave \parindent untouched.
+    paragraph-indent .tl_set:N = \l__luatexcn_hori_parindent_tl,
+    paragraph-indent .initial:n = { 2em },
+  }
+
+% Push current option values to the Lua pipeline
+\cs_new_protected:Npn \__luatexcn_hori_sync_options:
+  {
+    \lua_now:e
+      {
+        local~p = require('hori.luatex-cn-hori-pipeline')
+        p.setup({
+          style = '\l__luatexcn_hori_style_tl',
+          level = '\l__luatexcn_hori_level_tl',
+          cjk_latin_space = \bool_if:NTF \l__luatexcn_hori_cjkspace_bool { true } { false },
+          inter_cjk_stretch = \l__luatexcn_hori_stretch_tl,
+        })
+      }
+  }
+
+\ProcessKeysOptions { luatexcn / hori }
+
+% ============================================================================
+% User commands
+% ============================================================================
+
+\NewDocumentCommand { \horiSetup } { m }
+  {
+    \keys_set:nn { luatexcn / hori } { #1 }
+    \__luatexcn_hori_sync_options:
+  }
+\NewCommandCopy { \横排设置 } { \horiSetup }
+
+% ============================================================================
+% Activation
+% ============================================================================
+
+\__luatexcn_hori_sync_options:
+\lua_now:n { require('hori.luatex-cn-hori-pipeline').enable() }
+
+% First-line indent, resolved against the document's main font at
+% \begin{document} time (2em of a CJK main font = two hanzi widths)
+\hook_gput_code:nnn { begindocument } { luatexcn-hori }
+  {
+    \tl_if_eq:NnF \l__luatexcn_hori_parindent_tl { keep }
+      {
+        \dim_set:Nn \parindent { \l__luatexcn_hori_parindent_tl }
+      }
+  }
