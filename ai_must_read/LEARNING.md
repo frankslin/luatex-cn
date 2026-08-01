@@ -411,6 +411,53 @@ if ok == true or ok == 0 then --[[ 成功 ]] end
 
 ---
 
+### 3.9 行末标点挤压：断点 glue 被丢弃，只能在 post_linebreak 用负 kern 回收
+
+**问题**：clreq 挤压第 1 级要求行末标点半字宽，但 pre_linebreak 插再多
+shrink 都无效——行末逗号的空白总是完整保留，反而是行内的间隙被挤
+（优先级倒挂）。
+
+**根本原因**：
+- TeX 断行后，断点处的 glue 被**丢弃**（discarded items），不是被挤到 0；
+- 标点的「可挤空白」是**字形 advance 的一部分**（思源宋体的「，」advance
+  1em，墨迹在左半），根本不在任何 glue 里，断行器看不见它。
+
+**错误方案**：
+```lua
+-- ❌ 在标点后的边界 glue 上加大 shrink：断点选中该 glue 时整个被丢弃，
+--    字形内空白原样留在行末
+glue.shrink = glue.shrink + 0.5
+```
+
+**正确方案**：
+```lua
+-- ✅ post_linebreak_filter 逐行处理：行末若是带末端空白的标点，
+--    插负 kern 回收空白，再把回收量按优先级还给行内 glue，最后重排
+local k = D.new(KERN)
+D.setfield(k, "kern", -blank_sp)
+D.insert_after(head, last_glyph, k)
+local packed = D.hpack(head, D.getfield(line, "width"), "exactly")
+D.setfield(line, "glue_set",  D.getfield(packed, "glue_set"))
+D.setfield(line, "glue_sign", D.getfield(packed, "glue_sign"))
+D.setfield(line, "glue_order", D.getfield(packed, "glue_order"))
+D.setlist(packed, nil); D.flush_node(packed)  -- 只取 glue_set，勿连环释放
+```
+
+**关键点**：
+- 含无穷 glue 的行（段末 parfillskip、`\hfill`）必须整行跳过，否则会把
+  兜底拉伸量错误分给有限 glue；
+- 覆盖 TeX 比例分配时，把受管 glue 设为定宽（stretch/shrink 清零）再
+  hpack，未受管 glue 的弹性保持原样（HR1）；
+- 求解器达不到目标（deficit）时，舍入基准要用**实际解出的总量**而非目标
+  值，否则差额会被塞回最后一个 gap、悄悄撤销挤压；
+- 度量验证的坑：挤压后字形 advance **不变**，可观测特征是 x1 越出文本
+  右缘 0.5em——估计右缘 M 时必须把所有可挤字符（含 `）」`等结束符）
+  排除在样本外，漏一类就把 M 抬高半字、全部断言失真。
+
+**适用场景**：横排 H2 行内二次分配；竖排回流 P2 时列末标点同理。
+
+---
+
 ## 四、 PDF 渲染问题
 
 ### 4.1 颜色指令
