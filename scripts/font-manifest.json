@@ -168,6 +168,28 @@
         "regression-test"
       ],
       "comment": "横排 clreq 测试（basic/hori.tex）：大陆偏靠式标点需要 SC 字面，TW-Kai 标点为台式居中不适用"
+    },
+    {
+      "name": "SourceHanSerifTC",
+      "file": "SourceHanSerifTC-Regular.otf",
+      "family": "Source Han Serif TC",
+      "font_version": "2.003",
+      "format": "otf",
+      "size": 24542148,
+      "sha256": "659c9606d8fda03372247b99ec5e5bbc5a034e06a70d80fb00546772c582d3e5",
+      "license": "OFL-1.1",
+      "origin": "https://github.com/adobe-fonts/source-han-serif",
+      "archive": {
+        "url": "https://github.com/adobe-fonts/source-han-serif/releases/download/2.003R/10_SourceHanSerifTC.zip",
+        "sha256": "c3f741e2da0d553ef729404a7be2febb3679245a918a6f47994cd863ddb268b3",
+        "member": "OTF/TraditionalChinese/SourceHanSerifTC-Regular.otf"
+      },
+      "urls": [],
+      "coverage": "繁体中文子集（Big5/CNS）；台式居中标点字面",
+      "required_for": [
+        "example"
+      ],
+      "comment": "横排示例《论辩的魂灵》正文用字：台式居中标点、字面疏朗；标题保留 TW-Kai"
     }
   ]
 }
