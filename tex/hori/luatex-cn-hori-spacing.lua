@@ -96,7 +96,21 @@ local DEFAULT_OPTS = {
     inter_cjk_stretch = 0.05,  -- em; stretch of last resort between hanzi
                                -- (H2 replaces TeX's proportional use of it
                                -- with the priority-ordered redistribution)
+    adjacent_punct = "1.5",    -- 连续标点缩减: "1.5"(clreq 原则) | "1" | "natural"
 }
+
+-- clreq 连续标点符号的调整：夹注符号与其他符号连排、或夹注符号重复出现
+-- （开+开/结+结/结+开）时，「无论文本整体采用何种风格」都应把 2 字宽的
+-- 相邻标点缩减成 1.5 字宽（风格可进一步到 1 字宽）。缩减量从两符号之间
+-- 的空白中扣除（方向天然满足「夹注符号紧靠被夹注的内容」——夹注符号
+-- 靠内容一侧无空白，可缩的只有外侧）。
+local BRACKET_CLASSES = { open = true, close = true }
+
+local function adjacent_reduction_cap(mode)
+    if mode == "1" then return 1.0 end
+    if mode == "natural" then return 0 end
+    return 0.5 -- "1.5" 默认
+end
 
 -- Shrinkable blank contributed by a punctuation glyph to the boundary on one
 -- of its sides (clreq 标点符号的宽度调整: the fullwidth glyph carries its
@@ -200,6 +214,20 @@ function M.boundary(prev, next_c, opts)
         next_s, next_cls = punct_side_shrink(next_c, "start", style)
     end
     local shrink_amount = prev_s + next_s
+    -- 连续标点无条件缩减（clreq: 2 → 1.5 字宽，风格可至 1）：夹注符号
+    -- 参与的标点连排，先把两符号间的空白固定扣掉 cap，余量仍作行内
+    -- 挤压容量。glue 因此可为负宽。
+    if pk == "cjk_punct" and nk == "cjk_punct" and shrink_amount > 0
+        and (BRACKET_CLASSES[punct_table.class_of(prev)]
+             or BRACKET_CLASSES[punct_table.class_of(next_c)]) then
+        local cap = adjacent_reduction_cap(
+            opts.adjacent_punct or DEFAULT_OPTS.adjacent_punct)
+        local reduction = math.min(cap, shrink_amount)
+        if reduction > 0 then
+            glue.width = glue.width - reduction
+            shrink_amount = shrink_amount - reduction
+        end
+    end
     if shrink_amount > 0 then
         glue.shrink = glue.shrink + shrink_amount
         local cls = (next_s > prev_s) and next_cls or prev_cls

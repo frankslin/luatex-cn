@@ -48,6 +48,8 @@ local opts = {
     hanging_punct = false,       -- 行尾点号悬挂 (opt-in)
     avoid_orphan_char = true,    -- H5 段末孤字避免 (clreq: 前行借字)
     last_line = "left",          -- H5 段末行对齐: left|center|right|justify
+    adjacent_punct = "1.5",      -- 连续标点缩减: "1.5"|"1"|"natural"
+    line_start_bracket = "trim", -- 行首开始夹注符号: trim|natural
 }
 
 -- Resolved quote conversion target ("curly"/"corner"/nil). clreq 引号体例:
@@ -87,6 +89,8 @@ function pipeline.setup(o)
     if o.hanging_punct ~= nil then opts.hanging_punct = o.hanging_punct end
     if o.avoid_orphan_char ~= nil then opts.avoid_orphan_char = o.avoid_orphan_char end
     if o.last_line ~= nil then opts.last_line = o.last_line end
+    if o.adjacent_punct ~= nil then opts.adjacent_punct = o.adjacent_punct end
+    if o.line_start_bracket ~= nil then opts.line_start_bracket = o.line_start_bracket end
     resolve_quote_target()
 end
 
@@ -244,11 +248,25 @@ function pipeline.process(head_d)
             -- The boundary already has spacing/break semantics; skip it.
             -- Word spaces (from source blanks) get the western_word class so
             -- the H2 pass manages them at clreq 挤压第 2 级 / 拉伸第 1 级.
+            -- clreq 数值界限按汉字宽夹紧：西文词距最小可挤到 1/4 汉字宽、
+            -- 最大可拉到半个汉字宽（字体自身弹性越界时收窄）。
             if id == GLUE and SPACE_SUBTYPES[D.getsubtype(curr)]
                 and D.getfield(curr, "width") > 0
                 and not D.get_attribute(curr, ATTR_ADJUST_CLASS) then
                 D.set_attribute(curr, ATTR_ADJUST_CLASS,
                     spacing.ADJUST_CLASS_CODES.western_word)
+                if prev_glyph then
+                    local em = em_size(prev_glyph)
+                    local w = D.getfield(curr, "width")
+                    local floor_w = math.min(w, math.floor(0.25 * em))
+                    if w - D.getfield(curr, "shrink") < floor_w then
+                        D.setfield(curr, "shrink", w - floor_w)
+                    end
+                    local ceil_w = math.max(w, math.floor(0.5 * em))
+                    if w + D.getfield(curr, "stretch") > ceil_w then
+                        D.setfield(curr, "stretch", ceil_w - w)
+                    end
+                end
             end
             blocked = true
         else

@@ -152,6 +152,20 @@ test_utils.run_test("line_end_blank_em: mainland end-blank / taiwan half / none"
     test_utils.assert_eq(adjline.line_end_blank_em(0xFF1A, "mainland"), 0)
 end)
 
+test_utils.run_test("line_start_blank_em: opening bracket leading blank only", function()
+    -- clreq 行首行尾标点挤压：行首开始夹注符号可减始侧半字
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300C, "mainland"), 0.5)
+    test_utils.assert_eq(adjline.line_start_blank_em(0xFF08, "mainland"), 0.5)
+    -- 现行 punct-table 对括号按大陆口径建模（space=start，两风格同）；
+    -- 台式居中括号（space=both → 0.25）随 H7 字面重定位一并修正
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300C, "taiwan"), 0.5)
+    -- 仅开始夹注符号适用：结束符/点号/汉字/style=none 均为 0
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300D, "mainland"), 0)
+    test_utils.assert_eq(adjline.line_start_blank_em(0x3002, "mainland"), 0)
+    test_utils.assert_eq(adjline.line_start_blank_em(0x4E00, "mainland"), 0)
+    test_utils.assert_eq(adjline.line_start_blank_em(0x300C, "none"), 0)
+end)
+
 test_utils.run_test("line_end_blank_em: hanging reclaims the whole point advance", function()
     -- 行尾点号悬挂（opt-in）：点号整字悬于版口外
     test_utils.assert_eq(adjline.line_end_blank_em(0x3002, "mainland", true), 1)

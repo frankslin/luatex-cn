@@ -60,6 +60,8 @@
 \tl_new:N \l__luatexcn_hori_quotestyle_tl
 \bool_new:N \l__luatexcn_hori_orphanchar_bool
 \tl_new:N \l__luatexcn_hori_lastline_tl
+\tl_new:N \l__luatexcn_hori_adjacentpunct_tl
+\tl_new:N \l__luatexcn_hori_linestartbracket_tl
 \int_new:N \l__luatexcn_hori_widowpenalty_int
 \int_new:N \l__luatexcn_hori_clubpenalty_int
 \fp_new:N \l__luatexcn_hori_rubysize_fp
@@ -111,6 +113,17 @@
     hanging-punct .bool_set:N = \l__luatexcn_hori_hanging_bool,
     hanging-punct .initial:n = { false },
 
+    % 连续标点缩减 (clreq: 夹注符号连排「无论何种风格都应该」把 2 字宽
+    % 缩为 1.5；风格可进一步到 1). natural = 仅按行紧度挤压
+    adjacent-punct .choices:nn = { 1.5 , 1 , natural }
+      { \tl_set:Nn \l__luatexcn_hori_adjacentpunct_tl { #1 } },
+    adjacent-punct .initial:n = { 1.5 },
+
+    % 行首开始夹注符号 (clreq: 可以缩减始侧半字，含段首缩进首行)
+    line-start-bracket .choices:nn = { trim , natural }
+      { \tl_set:Nn \l__luatexcn_hori_linestartbracket_tl { #1 } },
+    line-start-bracket .initial:n = { trim },
+
     % H1: 引号体例转换 (clreq: 简体横排弯引号先双后单 / 台湾传统引号
     % 先单后双). 默认 keep 不改动来稿用字；auto 按 style 选择；
     % curly/corner 显式指定目标体例（嵌套深度经一一映射保持）。
@@ -157,6 +170,8 @@
           quote_style = '\l__luatexcn_hori_quotestyle_tl',
           avoid_orphan_char = \bool_if:NTF \l__luatexcn_hori_orphanchar_bool { true } { false },
           last_line = '\l__luatexcn_hori_lastline_tl',
+          adjacent_punct = '\l__luatexcn_hori_adjacentpunct_tl',
+          line_start_bracket = '\l__luatexcn_hori_linestartbracket_tl',
         })
       }
   }
