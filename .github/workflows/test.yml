@@ -100,6 +100,11 @@ jobs:
       - name: Run regression tests
         run: python3 test/regression_test.py check
 
+      - name: Run clreq assertion tests
+        # 规范符合性度量断言（像素回归的盲区）：解析 PDF 内容流，
+        # 断言中西间距区间、禁则、符号分离、两字宽标点等 clreq 条款
+        run: python3 test/clreq_test.py
+
       - name: Regression summary
         # 把结果表 + 失败页差异定位写入 Actions step summary，一目了然
         if: always()
