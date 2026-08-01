@@ -7,10 +7,13 @@ local tests = {
     "test/unit_test/shared/punct-table-test.lua",
     "test/unit_test/shared/adjust-test.lua",
     "test/unit_test/shared/kinsoku-test.lua",
+    "test/unit_test/shared/ruby-metrics-test.lua",
 
-    -- Horizontal backend (clreq H1)
+    -- Horizontal backend (clreq H1/H2/H3)
     "test/unit_test/hori/hori-spacing-test.lua",
     "test/unit_test/hori/hori-pipeline-test.lua",
+    "test/unit_test/hori/hori-adjust-line-test.lua",
+    "test/unit_test/hori/hori-linemark-test.lua",
 
     -- Util layer (pure functions, no complex deps)
     "test/unit_test/util/utils-test.lua",
