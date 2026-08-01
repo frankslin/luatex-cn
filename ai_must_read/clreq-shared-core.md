@@ -74,6 +74,17 @@ tex/shared/
 | `forbid_line_end(char, level)` | bool | 同上 |
 | `is_unbreakable(char)` | bool | 附录「不可分离」列 |
 | `is_unbreakable_pair(a, b)` | bool | ——、……、⋯⋯ 成对判定（a==b 且为 dash/ellipsis） |
+
+> **待补（叹问号叠加）**：clreq 的叹问号叠加同样是「两个字幅的一个整体」，
+> 除 `？？` `！！` 外还包括 **`？！` `！？`** 这类异字组合（以及 `？？？`
+> 之类连排）。现行 `is_unbreakable_pair` 要求 `a == b` 且类别为
+> dash/ellipsis，两者都不满足；表内只有预组合码位 `‼`(U+203C)、
+> `⁇`(U+2047)，序列形式未识别。
+> 后果：断行侧因两符号都属行首禁则而侥幸不拆，但**宽度侧是错的**——
+> 叠加符号的字面空白会被 H2 分配器按 `fullstop_group` 挤压，
+> 而 clreq 要求它作为刚性整体不参与挤压。
+> 修法比照 dash/ellipsis：判定放宽为「两侧同属 question/exclamation」，
+> 并让 `no_break_between` 返回的 reason 落进后端的 RIGID 集合。
 | `vert_rotate(char)` | bool | 附录「直排右旋」列 |
 | `legacy_type(char)` | string \| nil | 兼容旧六类：open/close/fullstop/comma/middle/nobreak（P1 迁移用） |
 
