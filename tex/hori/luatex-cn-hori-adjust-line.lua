@@ -138,13 +138,19 @@ function M.plan(gaps, line_end, opts)
     return { widths = widths, line_end_kern = kern }
 end
 
---- Compressible trailing blank (em ratio) of a line-final punctuation glyph:
--- the end-side share of its adjustable space under the given style.
+--- Reclaimable trailing space (em ratio) of a line-final punctuation glyph.
+-- Normal mode: the end-side share of its adjustable blank (挤压第 1 级,
+-- 半字宽). Hanging mode (行尾点号悬挂, opt-in): a line-final pause/stop mark
+-- gives up its WHOLE advance — the glyph hangs entirely in the margin.
 -- @param char (number) codepoint
 -- @param style (string) "mainland" | "taiwan" | "none"
+-- @param hanging (boolean|nil) 行尾点号悬挂 enabled
 -- @return (number) em ratio ≥ 0
-function M.line_end_blank_em(char, style)
+function M.line_end_blank_em(char, style, hanging)
     if style == "none" then return 0 end
+    if hanging and punct_table.is_point(char) then
+        return punct_table.width_of(char, style) or 0
+    end
     local info = punct_table.space_info(char, style, "horizontal")
     if not info or info.shrink <= 0 then return 0 end
     if info.side == "end" then return info.shrink end
@@ -230,7 +236,8 @@ function M.process_line(line, attr, opts)
     local line_end = nil
     if last_glyph and tail_clean then
         local c = D.getfield(last_glyph, "char")
-        local blank_em = c and M.line_end_blank_em(c, opts.style) or 0
+        local blank_em = c
+            and M.line_end_blank_em(c, opts.style, opts.hanging_punct) or 0
         if blank_em > 0 then
             line_end = {
                 blank = math.floor(blank_em * em_size(last_glyph) + 0.5),

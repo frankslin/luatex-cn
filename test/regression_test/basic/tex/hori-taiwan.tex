@@ -1,0 +1,29 @@
+% hori-taiwan.tex - 横排 style=taiwan 专属回归测试
+% 覆盖：台式居中标点（TW-Kai 字面）、？！固定一字宽不挤压、
+%       行末标点挤压按台式末端空白（半侧 0.25em）、
+%       quote-style=auto 在台式下把弯引号转为传统引号（先单后双）
+\documentclass[12pt]{article}
+\usepackage[paperwidth=10cm, paperheight=16cm, margin=1.2cm]{geometry}
+% TW-Kai 的标点为台式居中字面，正是 style=taiwan 的正确测试字体
+\usepackage{fontspec}
+\setmainfont{TW-Kai}
+\usepackage[style=taiwan, quote-style=auto]{luatex-cn-hori}
+\pagestyle{empty}
+\begin{document}
+
+% 版面上渲染配置说明：让看输出的人不必翻源码即可知道启用了什么
+{\small 【測試配置】style=taiwan（台式居中標點，TW-Kai）；quote-style=auto——來稿彎引號將轉為傳統引號；未啟用行尾點號懸掛。}
+
+% --- 台式断行与行末挤压：窄版面多次换行，行末标点按台式空白（0.25em）回收
+天地玄黃，宇宙洪荒。日月盈昃，辰宿列張。寒來暑往，秋收冬藏。閏餘成歲，律呂調陽。雲騰致雨，露結為霜。金生麗水，玉出崑岡。劍號巨闕，珠稱夜光。果珍李柰，菜重芥薑。
+
+% --- 引號體例：來稿為彎引號，quote-style=auto 在台式下轉為傳統引號
+子曰：“學而時習之，不亦說乎？有朋自遠方來，不亦樂乎？人不知而不慍，不亦君子乎？”又曰：“溫故而知新，‘可以為師矣’。”
+
+% --- 台式？！固定一字寬：不參與挤压，其後空隙不應為負
+先生說：這樣可以嗎？當然可以！諸位切記！所謂何事？皆在此卷。
+
+% --- 中西混排在台式下同樣適用
+本專案基於 LuaTeX 引擎開發，版本 1.18.0，支援 OpenType 特性。
+
+\end{document}

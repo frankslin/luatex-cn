@@ -35,7 +35,8 @@ end
 -- Reset options before each scenario
 local function run(nodes, setup)
     pipeline.setup({ style = "mainland", level = "basic",
-                     cjk_latin_space = true, inter_cjk_stretch = 0.05 })
+                     cjk_latin_space = true, inter_cjk_stretch = 0.05,
+                     quote_style = "keep", hanging_punct = false })
     if setup then pipeline.setup(setup) end
     local head = test_utils.link_nodes(nodes)
     return describe(pipeline.process(head))
@@ -109,6 +110,31 @@ test_utils.run_test("cjk-latin-space=false falls back to bare break point", func
     local seq = run({ glyph(0x4E00), glyph(0x61) }, { cjk_latin_space = false })
     test_utils.assert_eq(seq[2].id, GLUE)
     test_utils.assert_eq(seq[2].width, 0)
+end)
+
+test_utils.run_test("quote conversion is opt-in: default keep leaves quotes alone", function()
+    local seq = run({ glyph(0x300C), glyph(0x4E00) })  -- 「一
+    test_utils.assert_eq(seq[1].char, 0x300C)
+end)
+
+test_utils.run_test("quote-style=curly converts corner quotes (clreq 引号体例)", function()
+    local seq = run({ glyph(0x300C), glyph(0x4E00), glyph(0x300D) },
+                    { quote_style = "curly" })
+    test_utils.assert_eq(seq[1].char, 0x201C)          -- 「→“
+    test_utils.assert_eq(seq[#seq].char, 0x201D)       -- 」→”
+    -- 转换后的字符参与禁则：行尾禁断在“ 之后
+    -- （“ 属 open 类，boundary 应带 penalty）
+    local found_penalty = false
+    for _, d in ipairs(seq) do
+        if d.penalty == 10000 then found_penalty = true end
+    end
+    test_utils.assert_true(found_penalty)
+end)
+
+test_utils.run_test("quote-style=auto follows style; corner for taiwan", function()
+    local seq = run({ glyph(0x201C), glyph(0x4E00) },
+                    { style = "taiwan", quote_style = "auto" })
+    test_utils.assert_eq(seq[1].char, 0x300C)          -- “→「
 end)
 
 test_utils.run_test("head is preserved", function()
