@@ -1,15 +1,24 @@
 -- luatex-cn-hori-pipeline.lua
--- Node pipeline for the horizontal (clreq) backend: walks each paragraph in
--- pre_linebreak_filter and inserts, at every CJK-involved character boundary,
--- the penalty / adjustable glue decided by hori-spacing.lua. TeX's line
--- breaker then handles break search globally (禁则 = penalty, 可调空间 =
--- glue); the H2 stage will re-distribute glue by clreq priority in
--- post_linebreak_filter using the ATTR_ADJUST_CLASS marks left here.
+-- Node pipeline for the horizontal (clreq) backend.
 --
--- Standalone: depends only on tex/shared/ and hori-spacing (never on the
--- vertical engine's core/).
+-- pre_linebreak_filter (H1): walks each paragraph and inserts, at every
+-- CJK-involved character boundary, the penalty / adjustable glue decided by
+-- hori-spacing.lua; Western word spaces get tagged with the western_word
+-- adjustment class (clreq 挤压第 2 级 / 拉伸第 1 级). TeX's line breaker then
+-- handles break search globally (禁则 = penalty, 可调空间 = glue).
+--
+-- post_linebreak_filter (H2/H3): re-distributes each line's surplus or
+-- shortfall by clreq priority via hori-adjust-line.lua (overriding TeX's
+-- proportional distribution, reclaiming the line-final punctuation blank),
+-- then draws the inter-line marks (专名号/书名号甲式/着重号) via
+-- hori-linemark.lua.
+--
+-- Standalone: depends only on tex/shared/ and the hori/ siblings (never on
+-- the vertical engine's core/).
 
 local spacing = require("hori.luatex-cn-hori-spacing")
+local adjust_line = require("hori.luatex-cn-hori-adjust-line")
+local linemark = require("hori.luatex-cn-hori-linemark")
 
 local pipeline = {}
 
@@ -32,17 +41,26 @@ local opts = {
     level = "basic",
     cjk_latin_space = true,
     inter_cjk_stretch = 0.05,
+    line_adjust = true,          -- H2 priority redistribution on/off
+    line_end_punct = "compress", -- "compress" | "natural"
 }
 
 --- Configure the pipeline.
--- @param o (table) { style, level, cjk_latin_space, inter_cjk_stretch }
+-- @param o (table) { style, level, cjk_latin_space, inter_cjk_stretch,
+--   line_adjust, line_end_punct }
 function pipeline.setup(o)
     if not o then return end
     if o.style ~= nil then opts.style = o.style end
     if o.level ~= nil then opts.level = o.level end
     if o.cjk_latin_space ~= nil then opts.cjk_latin_space = o.cjk_latin_space end
     if o.inter_cjk_stretch ~= nil then opts.inter_cjk_stretch = o.inter_cjk_stretch end
+    if o.line_adjust ~= nil then opts.line_adjust = o.line_adjust end
+    if o.line_end_punct ~= nil then opts.line_end_punct = o.line_end_punct end
 end
+
+-- Interword space glue subtypes (LuaTeX: spaceskip / xspaceskip; ordinary
+-- font spaces are emitted as spaceskip)
+local SPACE_SUBTYPES = { [13] = true, [14] = true }
 
 local function em_size(glyph_d)
     local fid = D.getfield(glyph_d, "font")
@@ -130,7 +148,15 @@ function pipeline.process(head_d)
         elseif id == KERN or id == WHATSIT then
             -- transparent for boundary purposes (font kerns, marks)
         elseif id == GLUE or id == PENALTY then
-            -- The boundary already has spacing/break semantics; skip it
+            -- The boundary already has spacing/break semantics; skip it.
+            -- Word spaces (from source blanks) get the western_word class so
+            -- the H2 pass manages them at clreq 挤压第 2 级 / 拉伸第 1 级.
+            if id == GLUE and SPACE_SUBTYPES[D.getsubtype(curr)]
+                and D.getfield(curr, "width") > 0
+                and not D.get_attribute(curr, ATTR_ADJUST_CLASS) then
+                D.set_attribute(curr, ATTR_ADJUST_CLASS,
+                    spacing.ADJUST_CLASS_CODES.western_word)
+            end
             blocked = true
         else
             -- boxes, discretionaries, rules, dirs, ...: reset context
@@ -150,6 +176,7 @@ end
 -- ============================================================================
 
 local CALLBACK_NAME = "luatexcn.hori.pre_linebreak"
+local POST_CALLBACK_NAME = "luatexcn.hori.post_linebreak"
 local enabled = false
 
 local function pre_linebreak(head, groupcode)
@@ -158,17 +185,28 @@ local function pre_linebreak(head, groupcode)
     return D.tonode(d)
 end
 
---- Register the pre_linebreak_filter (idempotent).
+local function post_linebreak(head, groupcode)
+    local d = D.todirect(head)
+    if opts.line_adjust then
+        d = adjust_line.process_lines(d, ATTR_ADJUST_CLASS, opts)
+    end
+    d = linemark.decorate(d)
+    return D.tonode(d)
+end
+
+--- Register the pre/post_linebreak_filter pair (idempotent).
 function pipeline.enable()
     if enabled then return end
     luatexbase.add_to_callback("pre_linebreak_filter", pre_linebreak, CALLBACK_NAME)
+    luatexbase.add_to_callback("post_linebreak_filter", post_linebreak, POST_CALLBACK_NAME)
     enabled = true
 end
 
---- Remove the callback (for tests / package unloading).
+--- Remove the callbacks (for tests / package unloading).
 function pipeline.disable()
     if not enabled then return end
     luatexbase.remove_from_callback("pre_linebreak_filter", CALLBACK_NAME)
+    luatexbase.remove_from_callback("post_linebreak_filter", POST_CALLBACK_NAME)
     enabled = false
 end
 

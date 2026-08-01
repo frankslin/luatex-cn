@@ -129,8 +129,9 @@ python3 test/geometry_test.py
 ```bash
 # 解析横排 PDF 内容流（字形 x 坐标 + advance），对 clreq 条款做度量断言：
 # 中西间距 ∈ [1/8, 1/2] em、点号旁/夹注号内侧无间距、行首行尾禁则、
-# 符号分离禁则（数字串/单位/货币同行零间隙）、两字宽标点等。
-# 每条断言注明 clreq 条款；H2 的验收断言（行末标点半字宽）也在此扩展。
+# 符号分离禁则（数字串/单位/货币同行零间隙）、两字宽标点、
+# 行末标点半字宽（H2 强制断言）、行间注词对齐（H4）等。
+# 每条断言注明 clreq 条款。
 python3 test/clreq_test.py                 # 编译并检查 basic/hori.tex
 python3 test/clreq_test.py yourfile.tex    # 检查其他横排文档
 ```

@@ -83,9 +83,24 @@ test_utils.run_test("kinsoku level is honored", function()
     test_utils.assert_eq(b(0x4E00, 0x2014, { level = "strict" }).penalty, 10000)
 end)
 
-test_utils.run_test("fullwidth digit run is unbreakable", function()
+test_utils.run_test("fullwidth digit run is unbreakable AND rigid", function()
     local r = b(0xFF11, 0xFF12)  -- １|２ (digit run via kinsoku)
     test_utils.assert_eq(r.penalty, 10000)
+    -- 符号分离禁则单元内部不得被拉伸（clreq: 作为一个整体）：
+    -- 无 stretch、无 adjust class（H2 兜底均分跳过）
+    test_utils.assert_eq(r.glue.stretch, 0)
+    test_utils.assert_nil(r.glue.class)
+end)
+
+test_utils.run_test("two-em pair interior is rigid; 一。boundary is not", function()
+    local dash = b(0x2014, 0x2014)  -- —|—
+    test_utils.assert_eq(dash.glue.stretch, 0)
+    test_utils.assert_nil(dash.glue.class)
+    -- 行末禁则边界（一|。）保有拉伸与 class：禁排不禁伸
+    local stop = b(0x4E00, 0x3002)
+    test_utils.assert_eq(stop.penalty, 10000)
+    test_utils.assert_true(stop.glue.stretch > 0)
+    test_utils.assert_not_nil(stop.glue.class)
 end)
 
 -- ============================================================================

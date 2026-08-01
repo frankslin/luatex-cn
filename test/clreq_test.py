@@ -387,16 +387,58 @@ def run_assertions(lines):
                 squeezed += 1
     r.check("标点挤压", f"存在被挤压的标点空白（负 gap × {squeezed}）", squeezed > 0)
 
-    # ---- 已知限制（H2 待修）：行末标点应挤成半字（clreq 挤压第 1 级）。
-    #      现阶段 TeX 断点丢弃 glue、无法压缩行末字形内空白——先记录现状，
-    #      H2 交付后把此断言改为强制。
-    line_end_puncts = [ln for ln in lines if ln.glyphs and ln.glyphs[-1].char in "，。、；"]
-    if line_end_puncts:
-        compressed = sum(
-            1 for ln in line_end_puncts
-            if (ln.glyphs[-1].x1 - ln.glyphs[-1].x0) / ln.glyphs[-1].em <= 0.5 + EPS)
-        print(f"  [INFO] 行末标点挤压（H2 目标）：{compressed}/{len(line_end_puncts)} "
-              f"行的行末标点 ≤ 半字宽（当前预期 0，H2 后应为全部）")
+    # ---- H2：行末标点半字宽（clreq 挤压第 1 级；line-end-punct=compress 默认）。
+    #      post_linebreak 用负 kern 回收行末字形内空白：字形 advance 不变，
+    #      但其空白伸出文本右缘之外。度量：满行右缘 M 取「非标点结尾行」的
+    #      最大 x1；标点结尾的满行须满足 M − x0(末字) ≤ 半字宽，
+    #      即标点在行内只占半字，回收的空白已还给行内其他间隙。
+    # 行末可挤压字符 = 末端带空白的点号与结束符（clreq: 行末标点/结束夹注号
+    # 均调成半字）。集合必须完整——漏掉的字符若真被挤压，其 x1 会超出文本
+    # 右缘 0.5em，把 margin 估计值抬高半字，令全部断言失真。
+    PUNCT_END = set("，。、；！？」』）》〉】〕")
+    margin = max((ln.glyphs[-1].x1 for ln in lines
+                  if ln.glyphs and ln.glyphs[-1].char not in PUNCT_END),
+                 default=0.0)
+    # 受挤压行的可观测特征：末字空白被负 kern 回收后，其 advance 越出文本
+    # 右缘（x1 > M）。数量下限是回归锁——若 H2 失效，标点行全部回到
+    # x1 = M，此断言立即失败。段末满行（带 parfillskip、无短缺，clreq 无需
+    # 挤压）x1 ≈ M，不计入。
+    compressed = [
+        ln for ln in lines
+        if ln.glyphs and ln.glyphs[-1].char in PUNCT_END
+        and ln.glyphs[-1].x1 - margin >= 0.2 * ln.glyphs[-1].em
+    ]
+    r.check("行末标点挤压", f"存在被挤压的行末标点行（{len(compressed)} 行 ≥ 5）",
+            len(compressed) >= 5)
+    bad = []
+    for ln in compressed:
+        g = ln.glyphs[-1]
+        occupied = (margin - g.x0) / g.em
+        if occupied > 0.5 + EPS:
+            bad.append(f"「…{ln.text[-6:]}」占 {occupied:.3f}em")
+    r.check("行末标点挤压",
+            f"受挤压的 {len(compressed)} 行行末标点在行内均 ≤ 半字宽",
+            not bad, str(bad[:3]))
+
+    # ---- H4 行间注：注文行（小字号）存在；注文块与基文块居中对齐（clreq 词对齐）
+    ann_lines = [ln for ln in lines if ln.glyphs and ln.glyphs[0].em < 8]
+    r.check("行间注", f"存在小字号注文行（{len(ann_lines)} 行 ≥ 2）",
+            len(ann_lines) >= 2)
+    ann = next((ln for ln in ann_lines if "zhōngguó" in ln.text), None)
+    r.check("行间注", "注文「zhōngguó」完整可见", ann is not None)
+    if ann is not None:
+        i = ann.text.find("zhōngguó")
+        a0 = ann.glyphs[i].x0
+        a1 = ann.glyphs[i + len("zhōngguó") - 1].x1
+        base = find_line(lines, "中")
+        j = base.text.find("中")
+        # 注文比基文宽 → 基文「中 国」被加大字距铺满注文宽（clreq: 长于基文时
+        # 加大基文字距），两块中心应重合
+        b0 = base.glyphs[j].x0
+        b1 = base.glyphs[base.text.find("国", j)].x1
+        diff = abs((a0 + a1) / 2 - (b0 + b1) / 2) / base.glyphs[j].em
+        r.check("行间注", f"「zhōngguó」与「中国」中心对齐 偏差={diff:.3f}em ≤ 0.1",
+                diff <= 0.1)
 
     return r
 

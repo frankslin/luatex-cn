@@ -129,6 +129,20 @@ end
 --       class = "fallback"|"cjk_western",
 --     } | nil,
 --   }
+-- Boundaries protected by the symbol-separation rules form an indivisible
+-- UNIT (数字串、两字宽标点对……): besides forbidding the break, no stretch may
+-- open inside them — the H2 fallback distribution (兜底均分) must skip these
+-- gaps. Line start/end kinsoku ("forbid_start"/"forbid_end") is NOT a unit:
+-- 一。may not break, but the gap before 。 stretches like any other.
+local RIGID_REASONS = {
+    unbreakable_pair = true,
+    digit_run = true,
+    digit_suffix = true,
+    sign_prefix = true,
+    currency = true,
+    western_word = true,
+}
+
 function M.boundary(prev, next_c, opts)
     opts = opts or DEFAULT_OPTS
     local pk = M.kind(prev)
@@ -143,7 +157,7 @@ function M.boundary(prev, next_c, opts)
         return nil
     end
 
-    local forbidden = kinsoku.no_break_between(prev, next_c,
+    local forbidden, reason = kinsoku.no_break_between(prev, next_c,
         { level = opts.level or DEFAULT_OPTS.level })
 
     local glue
@@ -190,6 +204,15 @@ function M.boundary(prev, next_c, opts)
         glue.shrink = glue.shrink + shrink_amount
         local cls = (next_s > prev_s) and next_cls or prev_cls
         if cls then glue.class = cls end
+    end
+
+    -- Rigid unit interior: keep the glue as a (penalty-protected) break
+    -- point, but strip its stretch AND its adjustment class — an unclassed
+    -- gap is invisible to the H2 solver, so neither TeX's proportional pass
+    -- nor the fallback even-distribution can open space inside the unit.
+    if forbidden and RIGID_REASONS[reason] then
+        glue.stretch = 0
+        glue.class = nil
     end
 
     return {

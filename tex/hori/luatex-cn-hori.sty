@@ -54,6 +54,14 @@
 \bool_new:N \l__luatexcn_hori_cjkspace_bool
 \tl_new:N \l__luatexcn_hori_stretch_tl
 \tl_new:N \l__luatexcn_hori_parindent_tl
+\bool_new:N \l__luatexcn_hori_lineadjust_bool
+\tl_new:N \l__luatexcn_hori_lineendpunct_tl
+\fp_new:N \l__luatexcn_hori_rubysize_fp
+\fp_new:N \l__luatexcn_hori_rubygap_fp
+
+% Ruby defaults come from the shared clreq metrics layer (HR5):
+% defines \c__luatexcn_ruby_size_default_tl / \c__luatexcn_ruby_gap_default_tl
+\lua_now:n { require('shared.luatex-cn-ruby-metrics').tex_defaults() }
 
 \keys_define:nn { luatexcn / hori }
   {
@@ -80,6 +88,23 @@
     % Set to `keep' to leave \parindent untouched.
     paragraph-indent .tl_set:N = \l__luatexcn_hori_parindent_tl,
     paragraph-indent .initial:n = { 2em },
+
+    % H2: per-line priority redistribution (clreq 挤压 7 级 / 拉伸 2 级)
+    line-adjust .bool_set:N = \l__luatexcn_hori_lineadjust_bool,
+    line-adjust .initial:n = { true },
+
+    % H2: line-final punctuation blank (clreq 挤压第 1 级: 行末标点半字宽).
+    % compress = always reclaim the blank and re-give it to the line;
+    % natural  = reclaim only as far as the line's tightness demands.
+    line-end-punct .choices:nn = { compress , natural }
+      { \tl_set:Nn \l__luatexcn_hori_lineendpunct_tl { #1 } },
+    line-end-punct .initial:n = { compress },
+
+    % H4: annotation size ratio / row gap (defaults from shared/ruby-metrics)
+    ruby-size .fp_set:N = \l__luatexcn_hori_rubysize_fp,
+    ruby-size .initial:x = { \c__luatexcn_ruby_size_default_tl },
+    ruby-gap .fp_set:N = \l__luatexcn_hori_rubygap_fp,
+    ruby-gap .initial:x = { \c__luatexcn_ruby_gap_default_tl },
   }
 
 % Push current option values to the Lua pipeline
@@ -93,6 +118,8 @@
           level = '\l__luatexcn_hori_level_tl',
           cjk_latin_space = \bool_if:NTF \l__luatexcn_hori_cjkspace_bool { true } { false },
           inter_cjk_stretch = \l__luatexcn_hori_stretch_tl,
+          line_adjust = \bool_if:NTF \l__luatexcn_hori_lineadjust_bool { true } { false },
+          line_end_punct = '\l__luatexcn_hori_lineendpunct_tl',
         })
       }
   }
@@ -109,6 +136,119 @@
     \__luatexcn_hori_sync_options:
   }
 \NewCommandCopy { \横排设置 } { \horiSetup }
+
+% ============================================================================
+% H3: Inter-line indication marks (行间标号, 单面装 — drawn below the text)
+% ============================================================================
+
+% tex.setattribute is group-local: everything typeset inside the group
+% carries the mark attribute; drawing happens per line in post_linebreak.
+\cs_new_protected:Npn \__luatexcn_hori_linemark:nn #1#2
+  {
+    \group_begin:
+    \lua_now:n { require('hori.luatex-cn-hori-linemark').mark_on(#1) }
+    #2
+    \group_end:
+  }
+
+% Kind codes match linemark.KIND_* (1 专名 / 2 书名甲 / 3 着重)
+\NewDocumentCommand { \专名 } { m } { \__luatexcn_hori_linemark:nn { 1 } { #1 } }
+\NewDocumentCommand { \书名号甲 } { m } { \__luatexcn_hori_linemark:nn { 2 } { #1 } }
+\NewCommandCopy { \书名甲 } { \书名号甲 }
+\NewDocumentCommand { \着重 } { m } { \__luatexcn_hori_linemark:nn { 3 } { #1 } }
+
+% ============================================================================
+% H4: Inter-line annotations (行间注: 拼音标音 / 中外文对照)
+% ============================================================================
+
+\box_new:N \l__luatexcn_hori_ruby_base_box
+\box_new:N \l__luatexcn_hori_ruby_ann_box
+\seq_new:N \l__luatexcn_hori_ruby_ann_seq
+\bool_new:N \l__luatexcn_hori_ruby_first_bool
+
+% Annotation font: the current font scaled by ruby-size
+\cs_new_protected:Npn \__luatexcn_hori_ruby_annfont:
+  {
+    \fontsize
+      { \fp_eval:n { \l__luatexcn_hori_rubysize_fp * \f@size } }
+      { \fp_eval:n { \l__luatexcn_hori_rubysize_fp * \f@size } }
+    \selectfont
+  }
+
+% Item separator: skipped before the first item, an #1-wide skip after that
+\cs_new_protected:Npn \__luatexcn_hori_ruby_sep:n #1
+  {
+    \bool_if:NTF \l__luatexcn_hori_ruby_first_bool
+      { \bool_set_false:N \l__luatexcn_hori_ruby_first_bool }
+      { \skip_horizontal:n { #1 } }
+  }
+
+% Row contents with #1 inner gaps. Measurement uses the SAME constructions
+% with 0pt gaps, so measured and rebuilt widths agree exactly (a plain
+% concatenation would keep inter-item font kerns the separators suppress).
+\cs_new_protected:Npn \__luatexcn_hori_ruby_base_content:nn #1#2
+  {
+    \bool_set_true:N \l__luatexcn_hori_ruby_first_bool
+    \tl_map_inline:nn { #2 } { \__luatexcn_hori_ruby_sep:n { #1 } ##1 }
+  }
+\cs_new_protected:Npn \__luatexcn_hori_ruby_ann_content:n #1
+  {
+    \__luatexcn_hori_ruby_annfont:
+    \bool_set_true:N \l__luatexcn_hori_ruby_first_bool
+    \seq_map_inline:Nn \l__luatexcn_hori_ruby_ann_seq
+      { \__luatexcn_hori_ruby_sep:n { #1 } ##1 }
+  }
+
+% \__luatexcn_hori_ruby:nn {基文} {注文}
+% clreq 词对齐 solved by shared/luatex-cn-ruby-metrics.lua (HR5): the shorter
+% row is spread across the block width (n slots: half at each edge), the
+% longer row is set solid. Annotation syllables split on spaces (分词连写).
+\cs_new_protected:Npn \__luatexcn_hori_ruby:nn #1#2
+  {
+    \group_begin:
+    \seq_set_split:Nnn \l__luatexcn_hori_ruby_ann_seq { ~ } { #2 }
+    \hbox_set:Nn \l__luatexcn_hori_ruby_base_box
+      { \__luatexcn_hori_ruby_base_content:nn { 0pt } { #1 } }
+    \hbox_set:Nn \l__luatexcn_hori_ruby_ann_box
+      { \__luatexcn_hori_ruby_ann_content:n { 0pt } }
+    % Solve the block layout in the shared layer → \l__luatexcn_hori_ruby_*_tl
+    \lua_now:e
+      {
+        require('shared.luatex-cn-ruby-metrics').tex_layout(
+          \dim_to_decimal_in_sp:n { \box_wd:N \l__luatexcn_hori_ruby_base_box },
+          \dim_to_decimal_in_sp:n { \box_wd:N \l__luatexcn_hori_ruby_ann_box },
+          \tl_count:n { #1 },
+          \seq_count:N \l__luatexcn_hori_ruby_ann_seq )
+      }
+    \mode_leave_vertical:
+    % Zero glues on both sides restore the break opportunities a box boundary
+    % would otherwise remove (break before/after the annotated word)
+    \skip_horizontal:n { 0pt }
+    \vbox:n
+      {
+        \hbox_to_wd:nn { \l__luatexcn_hori_ruby_width_tl }
+          {
+            \skip_horizontal:n { \l__luatexcn_hori_ruby_ann_edge_tl }
+            \__luatexcn_hori_ruby_ann_content:n { \l__luatexcn_hori_ruby_ann_inner_tl }
+            \skip_horizontal:n { \l__luatexcn_hori_ruby_ann_edge_tl }
+          }
+        \nointerlineskip
+        \skip_vertical:n { \fp_use:N \l__luatexcn_hori_rubygap_fp em }
+        \hbox_to_wd:nn { \l__luatexcn_hori_ruby_width_tl }
+          {
+            \skip_horizontal:n { \l__luatexcn_hori_ruby_base_edge_tl }
+            \__luatexcn_hori_ruby_base_content:nn
+              { \l__luatexcn_hori_ruby_base_inner_tl } { #1 }
+            \skip_horizontal:n { \l__luatexcn_hori_ruby_base_edge_tl }
+          }
+      }
+    \skip_horizontal:n { 0pt }
+    \group_end:
+  }
+
+\NewDocumentCommand { \ruby } { m m } { \__luatexcn_hori_ruby:nn { #1 } { #2 } }
+\NewCommandCopy { \拼音 } { \ruby }
+\NewCommandCopy { \对照 } { \ruby }
 
 % ============================================================================
 % Activation
