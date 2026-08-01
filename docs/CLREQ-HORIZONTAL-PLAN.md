@@ -254,8 +254,12 @@ TeX 段落
   页首/页尾孤行（`widow-penalty`/`club-penalty` 键，默认 10000 禁止）。
 - ✅ 段末行对齐四种（原 H2 遗留归并）：`last-line = left(默认) | center |
   right | justify`——center/right 平移行盒（parfillskip 伸展量即空量）；
-  justify 清零 parfillskip、空量作 surplus 交 H2 分配器按优先级吸收
-  （兜底均分 → 末行均排）。
+  justify 清零 parfillskip、空量作 surplus 交 H2 分配器按优先级吸收。
+  **均排口径（clreq）**：均排是行级机制——没排满的行（多因禁则）按
+  拉伸优先级 + 兜底均分铺满使两端对齐，**正文段落末行不均排**；这两点
+  默认行为均已符合（中间行由 H2 分配器铺满、末行 left）。`justify` 对应
+  clreq 的显式例外体例：列表、人名/物品名单、表格标题求体例一致时
+  「段落末行或仅有一行亦使用均排」。
 - ✅ 号数字号（`\字号{五号}` / `\字号{小四}[1.7]`）：号数表在
   `shared/luatex-cn-type-sizes.lua`（bp 制，初号…八号含小半档），
   横竖排共享。
