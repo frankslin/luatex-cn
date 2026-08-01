@@ -46,6 +46,8 @@ local opts = {
     line_end_punct = "compress", -- "compress" | "natural"
     quote_style = "keep",        -- "keep" | "auto" | "curly" | "corner"
     hanging_punct = false,       -- 行尾点号悬挂 (opt-in)
+    avoid_orphan_char = true,    -- H5 段末孤字避免 (clreq: 前行借字)
+    last_line = "left",          -- H5 段末行对齐: left|center|right|justify
 }
 
 -- Resolved quote conversion target ("curly"/"corner"/nil). clreq 引号体例:
@@ -83,6 +85,8 @@ function pipeline.setup(o)
     if o.line_end_punct ~= nil then opts.line_end_punct = o.line_end_punct end
     if o.quote_style ~= nil then opts.quote_style = o.quote_style end
     if o.hanging_punct ~= nil then opts.hanging_punct = o.hanging_punct end
+    if o.avoid_orphan_char ~= nil then opts.avoid_orphan_char = o.avoid_orphan_char end
+    if o.last_line ~= nil then opts.last_line = o.last_line end
     resolve_quote_target()
 end
 
@@ -112,6 +116,59 @@ local function make_glue(width_sp, stretch_sp, shrink_sp, class_name)
         D.set_attribute(g, ATTR_ADJUST_CLASS, code)
     end
     return g
+end
+
+-- Nodes transparent when walking for the previous/next glyph
+local TRANSPARENT = {
+    [KERN] = true, [GLUE] = true, [PENALTY] = true, [WHATSIT] = true,
+}
+
+local function prev_glyph_of(n)
+    local p = D.getprev(n)
+    while p do
+        local id = D.getid(p)
+        if id == GLYPH then return p end
+        if not TRANSPARENT[id] then return nil end
+        p = D.getprev(p)
+    end
+    return nil
+end
+
+-- 段末孤字避免（clreq H5: 段落最后一行不宜只剩一个汉字，孤字可带
+-- 后随标点）：在段末「内容字」前的断点补 penalty 10000。TeX 的全局
+-- 断行随之把前一行的字借到末行（前行借字），末行至少两字。
+local function protect_paragraph_end(head_d)
+    -- 最后一个字形（跳过段尾的 glue/penalty 等）
+    local n = D.tail(head_d)
+    while n and D.getid(n) ~= GLYPH do
+        if not TRANSPARENT[D.getid(n)] then return end
+        n = D.getprev(n)
+    end
+    if not n then return end
+    -- 跳过末尾标点串，得到段末内容字
+    local content = n
+    while content do
+        local c = D.getfield(content, "char")
+        if not c or spacing.kind(c) ~= "cjk_punct" then break end
+        content = prev_glyph_of(content)
+    end
+    if not content then return end
+    local cc = D.getfield(content, "char")
+    if not cc or spacing.kind(cc) ~= "cjk" then return end
+    -- 内容字之前最近的断点 glue；其前已有禁断 penalty 则天然受保护
+    local g = D.getprev(content)
+    while g and (D.getid(g) == KERN or D.getid(g) == WHATSIT) do
+        g = D.getprev(g)
+    end
+    if not g or D.getid(g) ~= GLUE then return end
+    local before = D.getprev(g)
+    if before and D.getid(before) == PENALTY
+        and D.getfield(before, "penalty") >= 10000 then
+        return
+    end
+    -- 须有前字可借
+    if not prev_glyph_of(g) then return end
+    D.insert_before(head_d, g, make_penalty(10000))
 end
 
 --- Process one node list: insert boundary nodes between adjacent glyphs.
@@ -218,8 +275,14 @@ local enabled = false
 local function pre_linebreak(head, groupcode)
     local d = D.todirect(head)
     d = pipeline.process(d)
+    if opts.avoid_orphan_char then
+        protect_paragraph_end(d)
+    end
     return D.tonode(d)
 end
+
+-- Exposed for unit tests
+pipeline.protect_paragraph_end = protect_paragraph_end
 
 local function post_linebreak(head, groupcode)
     local d = D.todirect(head)

@@ -104,6 +104,24 @@ test_utils.run_test("plan compress falls back to natural when nothing can absorb
     test_utils.assert_eq(r.widths[1], 0)
 end)
 
+test_utils.run_test("plan surplus: last-line justify absorbs the parfillskip slack", function()
+    -- H5 justify：parfillskip 清零后，其伸展量作为 surplus 交间隙吸收——
+    -- 先按拉伸优先级（西文词距→中西间距），余量兜底均分
+    local gaps = {
+        { width = em(0.25), stretch = em(0.25), shrink = 0,
+          class = "western_word", effective = em(0.25) },
+        { width = 0, stretch = em(0.05), shrink = 0,
+          class = "fallback", effective = 0 },
+        { width = 0, stretch = em(0.05), shrink = 0,
+          class = "fallback", effective = 0 },
+    }
+    local r = adjline.plan(gaps, nil, {}, em(1.25))
+    -- 词距先拉满 +0.25 → 0.5em；剩 1.0em 兜底均分到两个 fallback
+    test_utils.assert_eq(r.widths[1], em(0.5))
+    test_utils.assert_near(r.widths[2], em(0.5), 2)
+    test_utils.assert_near(r.widths[2] + r.widths[3], em(1.0), 2)
+end)
+
 test_utils.run_test("plan: exact sum (rounding remainder lands in last gap)", function()
     local gaps = {}
     for _ = 1, 7 do

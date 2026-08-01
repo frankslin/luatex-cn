@@ -63,16 +63,18 @@ local CLASS_ROLE = {
 --   compress (default): always reclaim the full trailing blank (行末标点
 --     固定半字宽) and re-give the space to the line by stretch priority;
 --   natural: reclaim only when the line is over-tight (挤压第 1 级 only).
+-- @param surplus (number|nil) extra sp the gaps must additionally absorb
+--   (H5 last-line justify: the zeroed \parfillskip's effective width)
 -- @return (table|nil) { widths = sp array parallel to gaps,
 --   line_end_kern = sp (≤ 0) } — nil when there is nothing to do.
-function M.plan(gaps, line_end, opts)
+function M.plan(gaps, line_end, opts, surplus)
     local mode = (opts and opts.line_end_punct) or "compress"
     local blank = line_end and line_end.blank or 0
     if #gaps == 0 and blank <= 0 then return nil end
 
     -- Total space TeX allocated to the managed region: what the gaps
     -- effectively occupy plus the punctuation blank as laid out.
-    local target = blank
+    local target = blank + (surplus or 0)
     local solver_gaps = {}
     local can_absorb = false
     for i, g in ipairs(gaps) do
@@ -198,15 +200,17 @@ function M.process_line(line, attr, opts)
 
     local gaps, gap_nodes = {}, {}
     local last_glyph, tail_clean = nil, true
+    local parfill = nil
     local n = head
     while n do
         local id = D.getid(n)
         if id == GLUE then
             local subtype = D.getsubtype(n)
-            if subtype == GLUE_PARFILLSKIP
-                or D.getfield(n, "stretch_order") > 0
+            if subtype == GLUE_PARFILLSKIP then
+                parfill = n -- last line of a paragraph: see below
+            elseif D.getfield(n, "stretch_order") > 0
                 or D.getfield(n, "shrink_order") > 0 then
-                return false -- last line of paragraph / \hfill: hands off
+                return false -- \hfill and friends: hands off
             end
             local code = D.get_attribute(n, attr)
             local class = code and CODE_TO_CLASS[code]
@@ -233,6 +237,29 @@ function M.process_line(line, attr, opts)
         n = D.getnext(n)
     end
 
+    -- 段末行（含 \parfillskip）：按 last-line 对齐方式处理（H5 单行对齐）。
+    -- left（默认）＝ TeX 原样；center/right 平移行盒（parfillskip 的伸展量
+    -- 即行尾空量）；justify 把 parfillskip 清零、行内间隙按优先级吸收全部
+    -- 空量（兜底均分 → 均排效果）。
+    local surplus = 0
+    if parfill then
+        local mode = opts.last_line or "left"
+        if mode == "center" or mode == "right" then
+            local slack = effective_glue(parfill, line)
+            if slack <= 0 then return false end
+            local delta = (mode == "right") and slack or slack / 2
+            D.setfield(line, "shift", D.getfield(line, "shift") + delta)
+            return true
+        elseif mode == "justify" and #gaps > 0 then
+            surplus = effective_glue(parfill, line)
+            D.setfield(parfill, "width", 0)
+            D.setfield(parfill, "stretch", 0)
+            D.setfield(parfill, "shrink", 0)
+        else
+            return false -- left / 无可分配间隙
+        end
+    end
+
     local line_end = nil
     if last_glyph and tail_clean then
         local c = D.getfield(last_glyph, "char")
@@ -245,7 +272,7 @@ function M.process_line(line, attr, opts)
         end
     end
 
-    local result = M.plan(gaps, line_end, opts)
+    local result = M.plan(gaps, line_end, opts, surplus)
     if not result then return false end
 
     for i, g in ipairs(gap_nodes) do
