@@ -7,6 +7,7 @@ local tests = {
     "test/unit_test/shared/punct-table-test.lua",
     "test/unit_test/shared/adjust-test.lua",
     "test/unit_test/shared/kinsoku-test.lua",
+    "test/unit_test/shared/punct-squeeze-test.lua",
     "test/unit_test/shared/ruby-metrics-test.lua",
     "test/unit_test/shared/type-sizes-test.lua",
 
