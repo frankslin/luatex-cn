@@ -587,6 +587,30 @@ test_utils.run_test("flatten: 开始夹注符号跟在标点后收回始端半�
     test_utils.assert_eq(r[2].head, 0.5, "夹注符号的空白在始端，应全部记在始端")
 end)
 
+test_utils.run_test("flatten: 脚注标号组内的括号不参与宽度调整", function()
+    local constants = require("core.luatex-cn-constants")
+    -- ，︻一︼ ——「，」与标号的开括号相邻，但标号组的字幅由 marker 预处理
+    -- 按组高分配，不能再叠加标点宽度调整（否则组内括号被挤歪）
+    local nodes = {}
+    for i, c in ipairs({ 0x5B57, 0xFF0C, 0x3010, 0x4E00, 0x3011, 0x5B57 }) do
+        nodes[i] = test_utils.make_glyph(c, 1)
+    end
+    for i = 3, 5 do
+        node.direct.set_attribute(nodes[i], constants.ATTR_FOOTNOTE_MARKER, 12)
+    end
+    punct.flatten(test_utils.link_nodes(nodes), {}, CONTEXT_CTX)
+    test_utils.assert_nil(
+        node.direct.get_attribute(nodes[3], constants.ATTR_PUNCT_SQUEEZE),
+        "标号组的开括号不应带收回量")
+    test_utils.assert_nil(
+        node.direct.get_attribute(nodes[5], constants.ATTR_PUNCT_SQUEEZE),
+        "标号组的闭括号不应带收回量")
+    -- 组外的逗号照常判定，但标号组对它是不透明的：不得因为标号的开括号
+    -- 而触发连续标点缩减（clreq 的连续标点缩减针对夹注符号）
+    local comma = node.direct.get_attribute(nodes[2], constants.ATTR_PUNCT_SQUEEZE)
+    test_utils.assert_eq(comma, 1, "标号前的逗号应占满一字幅")
+end)
+
 test_utils.run_test("flatten: legacy 模式不写收回量属性", function()
     local ctx = { style = "mainland", squeeze = true, squeeze_mode = "legacy" }
     local r = flatten_chars({ 0x5B57, 0x3002, 0x300D }, ctx)
