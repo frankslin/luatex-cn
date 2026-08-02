@@ -72,6 +72,20 @@ constants.ATTR_STYLE_REG_ID = luatexbase.attributes.cnverticalstyle or luatexbas
 constants.ATTR_PUNCT_TYPE = luatexbase.attributes.cnverticalpuncttype or
     luatexbase.new_attribute("cnverticalpuncttype")
 
+-- Context-sensitive punctuation squeeze (clreq 标点符号的宽度调整).
+-- Value: 1 + round(1000 * 收回的字面空白/em)，即 1 表示「不挤压」、
+-- 251 表示收回 0.25 em；0/unset 表示这一节点未参与上下文判定。
+-- 由 punct.flatten 在分类之后按相邻上下文写入，layout 阶段据此缩短字幅。
+constants.ATTR_PUNCT_SQUEEZE = luatexbase.attributes.cnverticalpunctsqueeze or
+    luatexbase.new_attribute("cnverticalpunctsqueeze")
+
+-- 其中**始端**（直排为上侧）收回的量，同样是 1 + 千分比。
+-- clreq 规定字面空白有确定的一侧（大陆式点号在末端、开始夹注符号在始端），
+-- 收回哪一侧决定字面往哪边贴：收末端空白不移动字面（后字上移），收始端
+-- 空白才让字面向后贴紧被夹注内容。渲染阶段据此还原字面位置。
+constants.ATTR_PUNCT_SQUEEZE_HEAD = luatexbase.attributes.cnverticalpunctsqhead or
+    luatexbase.new_attribute("cnverticalpunctsqhead")
+
 -- Vertical rotation attribute (for glyphs that need 90° clockwise rotation)
 -- Used when font lacks vertical glyph forms (e.g., ellipsis, em dash)
 -- Value: 1 = needs rotation, 0 or unset = normal

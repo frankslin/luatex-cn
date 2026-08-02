@@ -287,6 +287,15 @@ local function get_cell_height(node, grid_height, punct_config)
     if punct_type and punct_type > 0 and punct_config then
         local style = punct_config.style
         local squeeze = punct_config.squeeze
+        -- clreq 上下文相关模式：收回量由 punct.flatten 按相邻上下文写在
+        -- ATTR_PUNCT_SQUEEZE 上（1 + 千分比），夹在汉字之间的标点为满幅。
+        if squeeze and punct_config.squeeze_mode == "context" then
+            local attr = D.get_attribute(node, constants.ATTR_PUNCT_SQUEEZE)
+            if attr and attr > 1 then
+                return math.floor(base * (1 - (attr - 1) / 1000) + 0.5)
+            end
+            return base
+        end
         if style ~= "taiwan" and squeeze then
             -- Only comma(4)/open(1)/close(2) get half height
             -- fullstop(3), middle(5), nobreak(6) stay full height

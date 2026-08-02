@@ -24,6 +24,7 @@ local D = node.direct
 local constants = require('core.luatex-cn-constants')
 local debug_mod = require('debug.luatex-cn-debug')
 local shared_punct = require('shared.luatex-cn-punct-table')
+local punct_squeeze = require('shared.luatex-cn-punct-squeeze')
 local dbg = debug_mod.get_debugger('punct')
 
 -- ============================================================================
@@ -437,6 +438,13 @@ function punct.setup(cfg)
     if cfg.squeeze ~= nil then _G.punct.squeeze = cfg.squeeze end
     if cfg.hanging ~= nil then _G.punct.hanging = cfg.hanging end
     if cfg.kinsoku ~= nil then _G.punct.kinsoku = cfg.kinsoku end
+    -- clreq 上下文相关宽度调整（squeeze_mode = "legacy" | "context"）
+    if cfg.squeeze_mode then _G.punct.squeeze_mode = cfg.squeeze_mode end
+    if cfg.adjacent_punct then _G.punct.adjacent_punct = cfg.adjacent_punct end
+    if cfg.line_start_bracket then
+        _G.punct.line_start_bracket = cfg.line_start_bracket
+    end
+    if cfg.line_end_punct then _G.punct.line_end_punct = cfg.line_end_punct end
 end
 
 -- ============================================================================
@@ -458,20 +466,75 @@ function punct.initialize(params, engine_ctx, plugin_contexts)
         return nil
     end
 
+    local style = (_G.punct and _G.punct.style) or "mainland"
     local ctx = {
-        style   = (_G.punct and _G.punct.style) or "mainland",
-        squeeze = not (_G.punct and _G.punct.squeeze == false), -- default true
+        style   = style,
+        -- style=none 是 clreq「不调整」预设：既不挤压也不偏靠
+        squeeze = (style ~= "none")
+            and not (_G.punct and _G.punct.squeeze == false), -- default true
         hanging = (_G.punct and _G.punct.hanging) or false,     -- default false
         kinsoku = not (_G.punct and _G.punct.kinsoku == false), -- default true
+        -- clreq 上下文相关宽度调整。默认 legacy = 现行无条件挤压，
+        -- 保证 ltc-guji 版面零变化（CLREQ-GAP-ANALYSIS R5 分档）；
+        -- vbook 两个类在配置里切到 context。
+        squeeze_mode = (_G.punct and _G.punct.squeeze_mode) or "legacy",
+        adjacent_punct = (_G.punct and _G.punct.adjacent_punct) or "1.5",
+        line_start_bracket = (_G.punct and _G.punct.line_start_bracket) or "trim",
+        line_end_punct = (_G.punct and _G.punct.line_end_punct) or "compress",
     }
 
-    dbg.log(string.format("punct plugin: enabled (style=%s, squeeze=%s, kinsoku=%s, hanging=%s)",
+    dbg.log(string.format(
+        "punct plugin: enabled (style=%s, squeeze=%s/%s, kinsoku=%s, hanging=%s)",
         ctx.style,
         tostring(ctx.squeeze),
+        ctx.squeeze_mode,
         tostring(ctx.kinsoku),
         tostring(ctx.hanging)))
 
     return ctx
+end
+
+-- ============================================================================
+-- Context-sensitive squeeze annotation (clreq 标点符号的宽度调整)
+-- ============================================================================
+
+--- Build the shared-layer options table from the plugin context.
+-- @param ctx (table) Plugin context
+-- @return (table) opts for shared.luatex-cn-punct-squeeze
+local function squeeze_opts(ctx)
+    return {
+        style = ctx.style,
+        mode = "vertical",
+        adjacent_punct = ctx.adjacent_punct,
+        line_start_bracket = ctx.line_start_bracket,
+        line_end_punct = ctx.line_end_punct,
+    }
+end
+
+--- Annotate every punctuation glyph with the blank it may reclaim, judged
+-- from its neighbours (clreq: 只有相邻标点连排才无条件缩减；夹在汉字之间
+-- 的标点占满一字幅). 行首/行尾的收回量要等断列结果才知道，留给 P2 的
+-- flush_buffer 接线（见 docs/CLREQ-VERTICAL-ADJUST-DESIGN.md）。
+-- @param seq (table) {{node, char, punct}, ...} in list order
+-- @param ctx (table) Plugin context
+-- @return (number) how many glyphs were annotated
+local function annotate_context_squeeze(seq, ctx)
+    if ctx.squeeze_mode ~= "context" or not ctx.squeeze then return 0 end
+    local opts = squeeze_opts(ctx)
+    local count = 0
+    for i, item in ipairs(seq) do
+        if item.punct then
+            local prev_c = seq[i - 1] and seq[i - 1].char or nil
+            local next_c = seq[i + 1] and seq[i + 1].char or nil
+            local plan = punct_squeeze.plan(prev_c, item.char, next_c, nil, opts)
+            D.set_attribute(item.node, constants.ATTR_PUNCT_SQUEEZE,
+                1 + math.floor(plan.total * 1000 + 0.5))
+            D.set_attribute(item.node, constants.ATTR_PUNCT_SQUEEZE_HEAD,
+                1 + math.floor(plan.head * 1000 + 0.5))
+            count = count + 1
+        end
+    end
+    return count
 end
 
 --- Flatten stage: classify punctuation and replace vertical quotes
@@ -486,6 +549,9 @@ function punct.flatten(head, params, ctx)
     local t = d_head
     local count_classified = 0
     local count_replaced = 0
+    -- 字符序列（逻辑码位，直排字形替换与 PUA 还原之前的那一个），
+    -- 供 flatten 之后的上下文判定使用。非字形节点视为透明。
+    local seq = {}
 
     while t do
         local id = D.getid(t)
@@ -496,6 +562,7 @@ function punct.flatten(head, params, ctx)
             local dec_id = D.get_attribute(t, constants.ATTR_DECORATE_ID)
             if not (dec_id and dec_id > 0) then
                 local char = D.getfield(t, "char")
+                local logical_char = char
 
                 -- 1. Vertical form replacement: brackets/quotes → vertical presentation forms
                 local vert_char = VERT_FORM_MAP[char]
@@ -529,6 +596,7 @@ function punct.flatten(head, params, ctx)
                     if orig then
                         ptype = punct.classify(orig)
                         if ptype then
+                            logical_char = orig
                             dbg.log(string.format(
                                 "punct: resolved PUA 0x%05X -> 0x%04X (%s) via tounicode",
                                 char, orig, ptype))
@@ -541,15 +609,20 @@ function punct.flatten(head, params, ctx)
                     D.set_attribute(t, constants.ATTR_PUNCT_TYPE, code)
                     count_classified = count_classified + 1
                 end
+
+                seq[#seq + 1] = { node = t, char = logical_char, punct = ptype ~= nil }
             end
         end
 
         t = next_node
     end
 
+    local count_context = annotate_context_squeeze(seq, ctx)
+
     if count_classified > 0 or count_replaced > 0 then
-        dbg.log(string.format("punct flatten: classified=%d, quotes_replaced=%d",
-            count_classified, count_replaced))
+        dbg.log(string.format(
+            "punct flatten: classified=%d, quotes_replaced=%d, context_squeeze=%d",
+            count_classified, count_replaced, count_context))
     end
 
     return D.tonode(d_head)
@@ -600,8 +673,11 @@ end
 function punct.layout(list, layout_map, engine_ctx, ctx)
     if not ctx then return end
     if not ctx.squeeze then return end
-    -- Taiwan style: no squeeze — all punctuation occupies full grid cell
-    if ctx.style == "taiwan" then return end
+    local context_mode = (ctx.squeeze_mode == "context")
+    -- Taiwan style (legacy mode): no squeeze — all punctuation occupies a full
+    -- grid cell. In context mode 台湾式仍适用 clreq 的连续标点缩减
+    -- （「无论文本整体采用何种风格」），故不再整体跳过。
+    if ctx.style == "taiwan" and not context_mode then return end
     -- Natural mode (no default_cell_height) handles punctuation sizing via
     -- get_cell_height() in layout-grid; squeeze post-processing would overwrite
     -- those carefully computed values.
@@ -666,7 +742,15 @@ function punct.layout(list, layout_map, engine_ctx, ctx)
             prev_ptype = curr_ptype
 
             -- Determine squeeze for this entry
-            if curr_ptype then
+            if context_mode then
+                -- clreq 上下文相关：收回量已由 flatten 阶段按相邻上下文算好
+                local attr = D.get_attribute(entry.node,
+                    constants.ATTR_PUNCT_SQUEEZE)
+                if attr and attr > 1 then
+                    squeeze_amount = (attr - 1) / 1000
+                    total_squeezed = total_squeezed + 1
+                end
+            elseif curr_ptype then
                 if has_leading_space(curr_ptype) or has_trailing_space(curr_ptype) then
                     local char = D.getfield(entry.node, "char")
                     squeeze_amount = (char and CHAR_SQUEEZE[char]) or DEFAULT_SQUEEZE
@@ -729,8 +813,9 @@ local MAINLAND_OFFSETS = {
 function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p_total_cols)
     if not ctx then return head end
 
-    -- Taiwan style: no adjustments needed (punctuation centered by default)
-    if ctx.style == "taiwan" then return head end
+    -- Taiwan style: no adjustments needed (punctuation centered by default);
+    -- style=none is the clreq 不调整 preset — likewise no offsets.
+    if ctx.style ~= "mainland" then return head end
 
     -- Mainland style: offset dot-class punctuation
     local grid_width = engine_ctx.g_width

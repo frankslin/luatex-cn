@@ -218,6 +218,32 @@ test_utils.run_test("initialize: reads _G.punct config", function()
     _G.punct = nil
 end)
 
+test_utils.run_test("initialize: 宽度调整默认 legacy（R5 分档：古籍类版面不变）", function()
+    _G.punct = nil
+    local ctx = punct.initialize({}, {}, {})
+    test_utils.assert_eq(ctx.squeeze_mode, "legacy")
+    test_utils.assert_eq(ctx.adjacent_punct, "1.5")
+    test_utils.assert_eq(ctx.line_start_bracket, "trim")
+    test_utils.assert_eq(ctx.line_end_punct, "compress")
+end)
+
+test_utils.run_test("initialize: squeeze-mode=context 与风格键透传", function()
+    _G.punct = nil
+    punct.setup({ squeeze_mode = "context", adjacent_punct = "1" })
+    local ctx = punct.initialize({}, {}, {})
+    test_utils.assert_eq(ctx.squeeze_mode, "context")
+    test_utils.assert_eq(ctx.adjacent_punct, "1")
+    _G.punct = nil
+end)
+
+test_utils.run_test("initialize: style=none 是 clreq 不调整预设（不挤压）", function()
+    _G.punct = { style = "none" }
+    local ctx = punct.initialize({}, {}, {})
+    test_utils.assert_eq(ctx.style, "none")
+    test_utils.assert_eq(ctx.squeeze, false)
+    _G.punct = nil
+end)
+
 -- ============================================================================
 -- make_kinsoku_hook
 -- ============================================================================
@@ -510,6 +536,62 @@ test_utils.run_test("INK_CENTER_CHARS: does not contain CJK or Latin", function(
     test_utils.assert_nil(chars[0x4E00])   -- 一
     test_utils.assert_nil(chars[0x0041])   -- A
     test_utils.assert_nil(chars[0xF00A0])  -- PUA (not in INK_CENTER_CHARS directly)
+end)
+
+-- ============================================================================
+-- flatten: 上下文相关收回量的标注（总量 + 始端量）
+-- ============================================================================
+-- clreq 收回的是「哪一侧」的空白决定字面往哪边让，所以两个量都要标，
+-- 只标总量会让渲染把标点对称缩短（PR #132 评审发现的缺陷）。
+
+local function flatten_chars(chars, ctx)
+    local constants = require("core.luatex-cn-constants")
+    local nodes = {}
+    for i, c in ipairs(chars) do
+        nodes[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(nodes), {}, ctx)
+    local out = {}
+    for i, n in ipairs(nodes) do
+        local total = node.direct.get_attribute(n, constants.ATTR_PUNCT_SQUEEZE)
+        local head = node.direct.get_attribute(n, constants.ATTR_PUNCT_SQUEEZE_HEAD)
+        out[i] = {
+            total = total and (total - 1) / 1000 or nil,
+            head = head and (head - 1) / 1000 or nil,
+        }
+    end
+    return out
+end
+
+local CONTEXT_CTX = {
+    style = "mainland", squeeze = true, squeeze_mode = "context",
+    adjacent_punct = "1.5", line_start_bracket = "trim",
+    line_end_punct = "compress",
+}
+
+test_utils.run_test("flatten: 汉字之间的逗号标注为不收回", function()
+    local r = flatten_chars({ 0x5B57, 0xFF0C, 0x5B57 }, CONTEXT_CTX)
+    test_utils.assert_eq(r[2].total, 0)
+    test_utils.assert_eq(r[2].head, 0)
+end)
+
+test_utils.run_test("flatten: 句号在结束夹注符号前收回末端半字（始端为 0）", function()
+    local r = flatten_chars({ 0x5B57, 0x3002, 0x300D }, CONTEXT_CTX)
+    test_utils.assert_eq(r[2].total, 0.5)
+    test_utils.assert_eq(r[2].head, 0, "大陆式点号的空白在末端，始端收回必须为 0")
+end)
+
+test_utils.run_test("flatten: 开始夹注符号跟在标点后收回始端半字", function()
+    local r = flatten_chars({ 0xFF1A, 0x300C, 0x5B57 }, CONTEXT_CTX)
+    test_utils.assert_eq(r[2].total, 0.5)
+    test_utils.assert_eq(r[2].head, 0.5, "夹注符号的空白在始端，应全部记在始端")
+end)
+
+test_utils.run_test("flatten: legacy 模式不写收回量属性", function()
+    local ctx = { style = "mainland", squeeze = true, squeeze_mode = "legacy" }
+    local r = flatten_chars({ 0x5B57, 0x3002, 0x300D }, ctx)
+    test_utils.assert_nil(r[2].total)
+    test_utils.assert_nil(r[2].head)
 end)
 
 print("\nAll core/core-punct-test tests passed!")
