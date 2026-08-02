@@ -33,6 +33,8 @@ STRESS_TEX = os.path.join(
     REPO_ROOT, "test", "clreq_test", "stress-unbreakable.tex")
 TAIWAN_TEX = os.path.join(
     REPO_ROOT, "test", "regression_test", "basic", "tex", "hori-taiwan.tex")
+VERTICAL_TEX = os.path.join(
+    REPO_ROOT, "test", "clreq_test", "vert-punct.tex")
 FONTS_DIR = os.path.join(REPO_ROOT, "test", "fonts")
 
 # 坐标/宽度舍入容差（em）。sp 取整与 PDF 三位小数远小于此。
@@ -57,8 +59,9 @@ class Glyph:
 
 
 class Line:
-    def __init__(self, y):
+    def __init__(self, y, page=1):
         self.y = y
+        self.page = page
         self.glyphs = []
 
     @property
@@ -220,7 +223,7 @@ def parse_pdf(path):
             key = (page_no, round(y, 2))
             line = lines.get(key)
             if line is None:
-                line = lines[key] = Line(y)
+                line = lines[key] = Line(y, page_no)
             for tok in re.finditer(rb"<([0-9A-Fa-f]+)>|(-?[\d.]+)", m.group(5)):
                 if tok.group(2) is not None:
                     # TJ 数字：千分 em，正数向左
@@ -240,6 +243,77 @@ def parse_pdf(path):
         line.glyphs.sort(key=lambda g: g.x0)
         out.append(line)
     return out
+
+
+class Column:
+    """直排的一列：字形自上而下排列，度量单位是「基线步长」。"""
+
+    def __init__(self, x):
+        self.x = x
+        self.glyphs = []   # [(char, y, em), ...]
+
+    @property
+    def text(self):
+        return "".join(g[0] for g in self.glyphs)
+
+    def span_em(self, i, j):
+        """第 i 与第 j 个字形基线之间的距离（em）。
+
+        直排的大陆式点号在渲染时另有偏靠位移（字面偏右上），所以「标点占
+        几个字幅」要用它**两侧汉字**的基线距离来量，而不是标点自身的位移。
+        """
+        (_, y0, em) = self.glyphs[i]
+        (_, y1, _e) = self.glyphs[j]
+        return (y0 - y1) / em
+
+    def index_of(self, sub, occurrence=0):
+        """列内文本中第 occurrence 次出现的 sub 的起始下标。"""
+        pos, start = -1, 0
+        for _ in range(occurrence + 1):
+            pos = self.text.find(sub, start)
+            if pos < 0:
+                raise SystemExit(f"列「{self.text[:16]}…」中找不到「{sub}」")
+            start = pos + 1
+        return pos
+
+    def step_em(self, i):
+        """第 i 个字形占用的纵向步长（em）= 它与下一字基线的距离。
+
+        直排下引擎给每个字形单独定位，字幅（cell）挤压直接体现为步长缩短，
+        因此步长比值就是 clreq「标点占几个字幅」的可度量形式。
+        """
+        (_, y0, em), (_, y1, _e) = self.glyphs[i], self.glyphs[i + 1]
+        return (y0 - y1) / em
+
+
+def parse_pdf_vertical(path, min_len=4):
+    """返回 Column 列表（直排）。按 x 分组、组内自上而下。
+
+    横排版本按 y 分行；直排每个字形的 y 都不同，改按 x 分列。
+    """
+    placements = []
+    for line in parse_pdf(path):
+        for g in line.glyphs:
+            placements.append((line.page, g.x0, line.y, g.char, g.em))
+    if not placements:
+        return []
+
+    # x 聚类：大陆式点号渲染时向列外侧偏靠（MAINLAND_OFFSETS），x 与同列
+    # 汉字相差约 0.2 字宽，故按容差聚类而不是按精确 x 分组。
+    em0 = placements[0][4]
+    tol = 0.45 * em0
+    out, cur, cur_page = [], None, None
+    # 先按页、再按 x（自右向左）；同页同 x 才算一列
+    for page, x, y, ch, em in sorted(placements, key=lambda p: (p[0], -p[1])):
+        if cur is None or page != cur_page or abs(cur.x - x) > tol:
+            cur = Column(x)
+            cur.page = page
+            cur_page = page
+            out.append(cur)
+        cur.glyphs.append((ch, y, em))
+    for col in out:
+        col.glyphs.sort(key=lambda t: -t[1])
+    return [c for c in out if len(c.glyphs) >= min_len]
 
 
 # ============================================================================
@@ -594,6 +668,111 @@ def run_taiwan_assertions(lines):
     return r
 
 
+def find_column(cols, substring):
+    for col in cols:
+        if substring in col.text:
+            return col
+    raise SystemExit(f"断言无法定位：没有一列包含「{substring}」")
+
+
+def run_vertical_assertions(cols):
+    """直排标点宽度调整（vert-punct.tex，ltc-cn-vbook + 上下文相关挤压）。
+
+    度量方式：直排字幅的挤压体现为基线步长缩短。大陆式点号在渲染时另有
+    偏靠位移，故一律以**两侧汉字**的基线距离（span）度量「这段占几个字
+    幅」，标点本身的位移不进入测量。
+    """
+    r = Reporter()
+
+    base = find_column(cols, "天地玄黄")
+    i = base.index_of("天")
+    unit = base.span_em(i, i + 1)   # 一个字幅 + 字间距 = 步长基准
+    steps = [base.span_em(i + k, i + k + 1) for k in range(3)]
+    r.check("字幅基准", f"汉字步长一致 = {unit:.3f}em",
+            all(abs(s - unit) < EPS for s in steps), str(steps))
+
+    def span_cells(col, a, b, occ_a=0, occ_b=0):
+        return col.span_em(col.index_of(a, occ_a), col.index_of(b, occ_b)) / unit
+
+    # ---- ① 夹在汉字之间的单个标点占满一字幅
+    #      （clreq 标点符号的宽度调整：挤压只在连续标点与行首行尾发生）
+    n = span_cells(base, "黄", "宇")
+    r.check("标点宽度调整", f"汉字间的逗号占满一字幅：黄→宇 = {n:.3f} 字幅（期望 2）",
+            abs(n - 2.0) < EPS)
+
+    # ---- ② 直排冒号/分号/问号/叹号固定一字幅（clreq mode 修正规则）
+    col = find_column(cols, "子曰")
+    for a, b, mark in [("曰", "学", "："), ("之", "不", "；"), ("乎", "有", "？")]:
+        n = span_cells(col, a, b)
+        r.check("直排固定标点",
+                f"「{mark}」固定一字幅：{a}→{b} = {n:.3f} 字幅（期望 2）",
+                abs(n - 2.0) < EPS)
+
+    # ---- ③ 连续标点缩减为 1.5 字幅（clreq 连续标点符号的调整）
+    col = find_column(cols, "金木水火土")
+    n = span_cells(col, "土", "引")
+    r.check("连续标点", f"「。」+「「」合计 1.5 字幅：土→引 = {n:.3f}（期望 2.5）",
+            abs(n - 2.5) < EPS)
+
+    col = find_column(cols, "连续引号")
+    n = span_cells(col, "好", "好", 0, 1)
+    r.check("连续标点",
+            f"「。」「」」「「」三连合计 2 字幅：好→好 = {n:.3f}（期望 3）",
+            abs(n - 3.0) < EPS)
+    n = span_cells(col, "说", "好")
+    r.check("连续标点",
+            f"「：」+「「」合计 1.5 字幅（冒号本身不可挤）：说→好 = {n:.3f}（期望 2.5）",
+            abs(n - 2.5) < EPS)
+
+    # ---- ④ 挤压方向（clreq: 收回的是哪一侧的空白，字面就往哪边让）
+    #      大陆式点号的空白在末端 → 收回后字面**不动**，让后一个符号上移；
+    #      开始夹注符号的空白在始端 → 收回后字面向后贴紧被夹注的内容。
+    ref = base.span_em(base.index_of("荒"), base.index_of("。")) / unit
+    got = col.span_em(col.index_of("好"), col.index_of("。")) / unit
+    r.check("挤压方向",
+            f"「。」收回末端空白后字面不移动：前字→。 = {got:.3f}，"
+            f"未缩减的同一距离 = {ref:.3f}",
+            abs(got - ref) < EPS)
+
+    i = col.index_of("。")
+    after = col.span_em(i, i + 1) / unit
+    r.check("挤压方向",
+            f"收回量落在「。」之后一侧：。→」 = {after:.3f} 字幅（应 < 1）",
+            after < 1.0 - EPS)
+
+    j = col.index_of("说")
+    bracket = col.span_em(j, j + 2) / unit   # 说 →（：）→「
+    r.check("挤压方向",
+            f"行内开始夹注符号收回始端空白后向后贴紧：说→「 = {bracket:.3f} 字幅（应 < 2）",
+            bracket < 2.0 - EPS)
+
+    # ---- ⑤ 行首禁则（clreq 行首行尾禁则，基本级）
+    #      用例用长度递增的数字串扫过列末的各个相位（与列容量无关），
+    #      其中必有若干段的逗号恰好越出列末：禁则须把它挤进本列，
+    #      而不是让它成为下一列的首字。
+    FORBID_START = set("，。、：；！？」』）》〉】〕｝］")
+    bad = [c.text[:8] for c in cols if c.text and c.text[0] in FORBID_START]
+    r.check("行首禁则", f"{len(cols)} 列均不以禁则字符开头", not bad, str(bad[:3]))
+
+    # 第二条只证明「相位扫描确实扫到了边界」——若禁则真的失效，上一条会先炸。
+    squeezed = [c for c in cols if c.text.endswith("，") and "一二三" in c.text]
+    r.check("行首禁则",
+            f"相位扫描扫到列末边界 {len(squeezed)} 次，逗号均被挤进本列"
+            f"（列长 {[len(c.glyphs) for c in squeezed]}）",
+            len(squeezed) >= 1)
+    return r
+
+
+def run_vertical_doc(name, tex, min_cols):
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf = compile_tex(tex, tmp)
+        cols = parse_pdf_vertical(pdf)
+    if len(cols) < min_cols:
+        raise SystemExit(f"{name}: 解析出的列数过少（{len(cols)}），解析可能失败")
+    print(f"\n=== {name}：解析到 {len(cols)} 列 ===")
+    return run_vertical_assertions(cols)
+
+
 def run_doc(name, tex, assert_fn, min_lines):
     with tempfile.TemporaryDirectory() as tmp:
         pdf = compile_tex(tex, tmp)
@@ -620,6 +799,7 @@ def main():
                     run_stress_assertions, 20),
             run_doc("hori-taiwan.tex 台式用例", TAIWAN_TEX,
                     run_taiwan_assertions, 8),
+            run_vertical_doc("vert-punct.tex 直排用例", VERTICAL_TEX, 4),
         ]
 
     passed = sum(r.passed for r in reporters)
