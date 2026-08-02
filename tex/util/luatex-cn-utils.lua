@@ -235,8 +235,11 @@ local function create_graphics_state_end()
     return "Q"
 end
 
+-- 前置声明：to_chinese_numeral 在万以上退回逐位输出
+local to_chinese_digits
+
 --- 将整数转换为传统的中文数字字符串
--- 例如：1 -> "一", 10 -> "十", 21 -> "二十一"
+-- 例如：1 -> "一", 10 -> "十", 21 -> "二十一", 1254 -> "一千二百五十四"
 -- @param n number 要转换的数字
 -- @return string 中文数字字符串
 local function to_chinese_numeral(n)
@@ -256,8 +259,7 @@ local function to_chinese_numeral(n)
             s = s .. digits[ones]
         end
         return s
-    else
-        -- Simple support up to 999 for now
+    elseif n < 1000 then
         local hundreds = math.floor(n / 100)
         local rest = n % 100
         local s = digits[hundreds] .. "百"
@@ -269,14 +271,31 @@ local function to_chinese_numeral(n)
             end
         end
         return s
+    elseif n < 10000 then
+        -- 千位：零的位置按传统写法补一个「零」（一千零五、一千零五十、
+        -- 一千二百）。此前只写到 999，脚注编号过千会取到 digits[nil] 而
+        -- 直接报错。
+        local thousands = math.floor(n / 1000)
+        local rest = n % 1000
+        local s = digits[thousands] .. "千"
+        if rest > 0 then
+            if rest < 100 then
+                s = s .. "零" .. to_chinese_numeral(rest)
+            else
+                s = s .. to_chinese_numeral(rest)
+            end
+        end
+        return s
     end
+    -- 万以上不做位值转换：脚注/校勘编号不会用到，逐位输出保证可读且不报错
+    return to_chinese_digits(n)
 end
 
 --- 将整数逐位转换为中文数字（915 → 九一五）
 -- 每一位数字独立转换，不使用位值（百/十）
 -- @param n number 要转换的数字
 -- @return string 中文数字字符串
-local function to_chinese_digits(n)
+function to_chinese_digits(n)
     if not n or n <= 0 then return "" end
     local digit_map = {
         [0] = "〇", "一", "二", "三", "四",
