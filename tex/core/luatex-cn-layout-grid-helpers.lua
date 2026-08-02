@@ -257,6 +257,37 @@ local function mark_occupied(occupancy, p, b, c, r)
 end
 
 -- =============================================================================
+-- Glyph ink metrics
+-- =============================================================================
+
+--- 字形的真实墨迹跨度（以字号为 1 的 em 比值，基线以上为正）。
+--
+-- 不能拿 height/depth 当墨迹：它们把基线到墨迹之间的空白也算进去。直排
+-- 结束夹注符号 ︼ 的墨迹在 [0.300, 0.668]，depth 为 0 而 height 是 0.668，
+-- 比真实墨迹（0.368）虚高 1.8 倍——按它缩放会让 ︻ ︼ 一对括号一大一小。
+-- descriptions 的 boundingbox 才是墨迹盒；取不到时退回 height/depth。
+--
+-- @param n (direct node) 字形节点
+-- @return (number, number) top_em, bottom_em（bottom 为负表示墨迹低于基线）
+local function glyph_ink_span(n)
+    local fid = D.getfont(n)
+    local f = fid and font.getfont(fid)
+    local char = D.getfield(n, "char")
+    local desc = f and f.descriptions and char and f.descriptions[char]
+    local bb = desc and desc.boundingbox
+    local upem = (f and f.units_per_em) or 1000
+    if bb and bb[2] and bb[4] and upem > 0 then
+        return bb[4] / upem, bb[2] / upem
+    end
+    local size = f and f.size
+    if size and size > 0 then
+        return (D.getfield(n, "height") or 0) / size,
+            -((D.getfield(n, "depth") or 0) / size)
+    end
+    return 0, 0
+end
+
+-- =============================================================================
 -- Cell height calculation (natural layout mode)
 -- =============================================================================
 
@@ -410,6 +441,7 @@ local function create_linemark_entry(opts)
 end
 
 helpers.create_linemark_entry = create_linemark_entry
+helpers.glyph_ink_span = glyph_ink_span
 
 package.loaded['core.luatex-cn-layout-grid-helpers'] = helpers
 return helpers
