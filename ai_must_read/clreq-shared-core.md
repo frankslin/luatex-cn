@@ -7,11 +7,12 @@
 ```
 tex/shared/
 ├── luatex-cn-punct-table.lua   # clreq 附录标点全表（单一数据源）
+├── luatex-cn-punct-squeeze.lua # 标点宽度调整的上下文判定
 ├── luatex-cn-adjust.lua        # 一维优先级空间分配器
 └── luatex-cn-kinsoku.lua       # 四级禁则 + 符号分离禁则
 ```
 
-依赖方向：`kinsoku` → `punct-table` ← 后端；`adjust` 无依赖。
+依赖方向：`kinsoku`/`punct-squeeze` → `punct-table` ← 后端；`adjust` 无依赖。
 单位约定：所有宽度/空间量均为**以字号为 1 的 em 比值**（纯数字），
 由后端乘以字号换算为 sp。`adjust` 对单位无假设，只要求全体输入一致。
 
@@ -108,6 +109,30 @@ tex/shared/
 
 `forbid_start`/`forbid_end` 存最低生效级别，级别序 none < basic < gb < strict，
 查询时 `当前级别 >= 条目级别` 即禁。
+
+---
+
+## 1bis. punct-squeeze.lua — 宽度调整的上下文判定
+
+依赖 punct-table。回答的问题是「这个标点**此刻**该收回多少字面空白」，
+clreq 只允许两种情形收回：① 相邻标点连排（夹注符号参与时无条件把 2 字宽
+减到 1.5，风格可到 1）；② 位于行首/行尾。夹在汉字之间的单个标点占满一字幅。
+
+| 函数 | 返回 | 说明 |
+|------|------|------|
+| `blanks(char, opts)` | head_em, tail_em | 该标点两端各携带的可收回空白（`side="both"` 各半；`style="none"` 全零） |
+| `plan(prev, cur, next, ctx, opts)` | {head, tail, total, reasons} | 上下文判定结果；`ctx = {at_line_start, at_line_end}`，缺省 nil = 只判相邻 |
+| `adjacent_reduction_cap(mode)` | number | `"1.5"→0.5`、`"1"→1.0`、`"natural"→0` |
+| `is_bracket(char)` | bool | 是否夹注符号（连续标点缩减的触发条件） |
+
+`opts = { style, mode, adjacent_punct, line_start_bracket, line_end_punct }`，
+键名与横排 `luatexcn/hori`、竖排 `luatexcn/punct` 的用户键一一对应
+（同一套风格预设 mainland / taiwan / none 贯穿两条后端）。
+
+后端接线现状：横排 `hori-spacing` 用 `is_bracket` / `adjacent_reduction_cap`；
+竖排 `punct.flatten` 用 `plan`（相邻上下文），结果写在 `ATTR_PUNCT_SQUEEZE`。
+`ctx.at_line_start/at_line_end` 在竖排尚无人传——断列结果只有
+`flush_buffer` 知道，见 `docs/CLREQ-VERTICAL-ADJUST-DESIGN.md`。
 
 ---
 

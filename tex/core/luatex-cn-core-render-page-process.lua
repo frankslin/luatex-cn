@@ -57,6 +57,27 @@ local dbg = debug.get_debugger('render')
 local glyph_dims = {}
 local glyph_params = {}
 
+--- clreq 挤压方向：把「缩短的字幅」还原成「字面该放在哪」。
+--
+-- 上下文相关挤压把标点的字面空白收回，缩短的字幅只用于列内排版算术；
+-- 字面位置必须按**空白原本在哪一侧**还原：按原始满幅定位，再按始端收回量
+-- 上移。于是收回末端空白时字面原地不动（后一个符号上移），收回始端空白时
+-- 字面才向后贴紧被夹注的内容。若把收回量当作对称缩短，居中逻辑会让句号
+-- 向上飘半个收回量、紧贴前字。
+--
+-- @param cell_height (number|nil) 排版用字幅（已扣收回量，sp）
+-- @param y_sp (number) 字幅起点（sp）
+-- @param squeeze_attr (number|nil) ATTR_PUNCT_SQUEEZE：1 + 总收回量千分比
+-- @param head_attr (number|nil) ATTR_PUNCT_SQUEEZE_HEAD：1 + 始端收回量千分比
+-- @param em (number|nil) 该字形的字号（sp）
+-- @return (number|nil, number) 定位用字幅（原始满幅）、定位用起点
+local function punct_ink_placement(cell_height, y_sp, squeeze_attr, head_attr, em)
+    if not (squeeze_attr and squeeze_attr > 1) then return cell_height, y_sp end
+    if type(cell_height) ~= "number" or not em then return cell_height, y_sp end
+    local head = (head_attr and head_attr > 1) and (head_attr - 1) / 1000 or 0
+    return cell_height + (squeeze_attr - 1) / 1000 * em, y_sp - head * em
+end
+
 -- 辅助函数：处理单个字形的定位
 local function handle_glyph_node(curr, p_head, pos, params, ctx)
     -- vertical_align now comes from ctx (read from _G.content or params in calculate_render_context)
@@ -108,9 +129,16 @@ local function handle_glyph_node(curr, p_head, pos, params, ctx)
     glyph_params.h_align = h_align
     glyph_params.sub_col = pos.sub_col
     glyph_params.textflow_align = (glyph_style and glyph_style.textflow_align) or ctx.textflow_align
-    glyph_params.cell_height = pos.cell_height
     glyph_params.cell_width = pos.cell_width
-    glyph_params.y_sp = pos.y_sp
+
+    local fdata = font.getfont(glyph_dims.font)
+    local ink_h, ink_y = punct_ink_placement(
+        pos.cell_height, pos.y_sp,
+        D.get_attribute(curr, constants.ATTR_PUNCT_SQUEEZE),
+        D.get_attribute(curr, constants.ATTR_PUNCT_SQUEEZE_HEAD),
+        fdata and fdata.size)
+    glyph_params.cell_height = ink_h
+    glyph_params.y_sp = ink_y
     glyph_params.band_y_offset_sp = pos.band_y_offset_sp or 0
     -- RTL pos.x from layout_map (nil triggers legacy fallback in calc_grid_position)
     glyph_params.pos_x = pos.x
@@ -543,6 +571,8 @@ local M = {
     handle_debug_drawing = handle_debug_drawing,
     handle_decorate_node = decorate_mod.handle_node,
     process_page_nodes = process_page_nodes,
+    -- 纯函数，供单元测试直接调用
+    punct_ink_placement = punct_ink_placement,
 }
 
 package.loaded['core.luatex-cn-core-render-page-process'] = M

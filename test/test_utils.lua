@@ -132,6 +132,10 @@ node = {
             if type(n) == "table" then return n.id end
             return nil
         end,
+        getfont = function(n)
+            if type(n) == "table" then return n.font end
+            return nil
+        end,
         get_attribute = function(n, id)
             if type(n) == "table" and n.attributes then return n.attributes[id] end
             return nil

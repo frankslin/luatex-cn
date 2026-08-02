@@ -7,6 +7,7 @@ local tests = {
     "test/unit_test/shared/punct-table-test.lua",
     "test/unit_test/shared/adjust-test.lua",
     "test/unit_test/shared/kinsoku-test.lua",
+    "test/unit_test/shared/punct-squeeze-test.lua",
     "test/unit_test/shared/ruby-metrics-test.lua",
     "test/unit_test/shared/type-sizes-test.lua",
 
@@ -29,6 +30,7 @@ local tests = {
 
     -- Core layer (pure function tests)
     "test/unit_test/core/core-punct-test.lua",
+    "test/unit_test/core/render-punct-ink-test.lua",
     "test/unit_test/core/core-metadata-test.lua",
     "test/unit_test/core/core-export-test.lua",
     "test/unit_test/core/core-page-split-test.lua",

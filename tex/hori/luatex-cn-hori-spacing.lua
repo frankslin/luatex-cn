@@ -17,6 +17,7 @@
 
 local punct_table = require("shared.luatex-cn-punct-table")
 local kinsoku = require("shared.luatex-cn-kinsoku")
+local punct_squeeze = require("shared.luatex-cn-punct-squeeze")
 
 local M = {}
 
@@ -104,13 +105,9 @@ local DEFAULT_OPTS = {
 -- 相邻标点缩减成 1.5 字宽（风格可进一步到 1 字宽）。缩减量从两符号之间
 -- 的空白中扣除（方向天然满足「夹注符号紧靠被夹注的内容」——夹注符号
 -- 靠内容一侧无空白，可缩的只有外侧）。
-local BRACKET_CLASSES = { open = true, close = true }
-
-local function adjacent_reduction_cap(mode)
-    if mode == "1" then return 1.0 end
-    if mode == "natural" then return 0 end
-    return 0.5 -- "1.5" 默认
-end
+-- 规则本体在共享层（HR5：clreq 规则只写在 tex/shared/）；这里只做接线。
+local is_bracket = punct_squeeze.is_bracket
+local adjacent_reduction_cap = punct_squeeze.adjacent_reduction_cap
 
 -- Shrinkable blank contributed by a punctuation glyph to the boundary on one
 -- of its sides (clreq 标点符号的宽度调整: the fullwidth glyph carries its
@@ -218,8 +215,7 @@ function M.boundary(prev, next_c, opts)
     -- 参与的标点连排，先把两符号间的空白固定扣掉 cap，余量仍作行内
     -- 挤压容量。glue 因此可为负宽。
     if pk == "cjk_punct" and nk == "cjk_punct" and shrink_amount > 0
-        and (BRACKET_CLASSES[punct_table.class_of(prev)]
-             or BRACKET_CLASSES[punct_table.class_of(next_c)]) then
+        and (is_bracket(prev) or is_bracket(next_c)) then
         local cap = adjacent_reduction_cap(
             opts.adjacent_punct or DEFAULT_OPTS.adjacent_punct)
         local reduction = math.min(cap, shrink_amount)

@@ -38,6 +38,10 @@
 \bool_new:N \l__luatexcn_punct_squeeze_bool
 \bool_new:N \l__luatexcn_punct_hanging_bool
 \bool_new:N \l__luatexcn_punct_kinsoku_bool
+\tl_new:N \l__luatexcn_punct_squeezemode_tl
+\tl_new:N \l__luatexcn_punct_adjacent_tl
+\tl_new:N \l__luatexcn_punct_linestartbracket_tl
+\tl_new:N \l__luatexcn_punct_lineendpunct_tl
 
 % ============================================================================
 % Key Definitions
@@ -59,6 +63,33 @@
     kinsoku .bool_set:N = \l__luatexcn_punct_kinsoku_bool,
     kinsoku .initial:n = {true},
     kinsoku .default:n = {true},
+
+    % 与横排 (luatexcn/hori) 同名同值的整体风格预设：mainland | taiwan | none
+    % （none = 不调整：既不挤压也不偏靠）。竖排与横排共用同一套预设词汇。
+    style .choices:nn = { mainland , taiwan , none }
+      { \tl_set:Nn \l__luatexcn_punct_style_tl { #1 } },
+
+    % clreq 标点宽度调整的判定方式：
+    %   legacy  = 现行无条件挤压（ltc-guji 默认，版面零变化）
+    %   context = 上下文相关（仅相邻标点 / 行首行尾触发；vbook 两类默认）
+    squeeze-mode .choices:nn = { legacy , context }
+      { \tl_set:Nn \l__luatexcn_punct_squeezemode_tl { #1 } },
+    squeeze-mode .initial:n = { legacy },
+
+    % 连续标点缩减：1.5（clreq 原则调整量）| 1（紧凑风格）| natural（不缩）
+    adjacent-punct .choices:nn = { 1.5 , 1 , natural }
+      { \tl_set:Nn \l__luatexcn_punct_adjacent_tl { #1 } },
+    adjacent-punct .initial:n = { 1.5 },
+
+    % 列首开始夹注符号：trim（缩减始侧半字）| natural
+    line-start-bracket .choices:nn = { trim , natural }
+      { \tl_set:Nn \l__luatexcn_punct_linestartbracket_tl { #1 } },
+    line-start-bracket .initial:n = { trim },
+
+    % 列末点号：compress（缩减末侧半字）| natural
+    line-end-punct .choices:nn = { compress , natural }
+      { \tl_set:Nn \l__luatexcn_punct_lineendpunct_tl { #1 } },
+    line-end-punct .initial:n = { compress },
   }
 
 % ============================================================================
@@ -76,6 +107,10 @@
           {true}{false},
         kinsoku~=~\bool_if:NTF~\l__luatexcn_punct_kinsoku_bool
           {true}{false},
+        squeeze_mode~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_squeezemode_tl}]=],
+        adjacent_punct~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_adjacent_tl}]=],
+        line_start_bracket~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_linestartbracket_tl}]=],
+        line_end_punct~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_lineendpunct_tl}]=],
       })
     }
   }
@@ -106,6 +141,12 @@
   {
     标点风格 .tl_set:N = \l__luatexcn_punct_style_tl,
     標點風格 .tl_set:N = \l__luatexcn_punct_style_tl,
+    风格预设 .tl_set:N = \l__luatexcn_punct_style_tl,
+    風格預設 .tl_set:N = \l__luatexcn_punct_style_tl,
+    宽度调整 .tl_set:N = \l__luatexcn_punct_squeezemode_tl,
+    寬度調整 .tl_set:N = \l__luatexcn_punct_squeezemode_tl,
+    连续标点 .tl_set:N = \l__luatexcn_punct_adjacent_tl,
+    連續標點 .tl_set:N = \l__luatexcn_punct_adjacent_tl,
     标点压缩 .bool_set:N = \l__luatexcn_punct_squeeze_bool,
     標點壓縮 .bool_set:N = \l__luatexcn_punct_squeeze_bool,
     标点悬挂 .bool_set:N = \l__luatexcn_punct_hanging_bool,

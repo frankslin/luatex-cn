@@ -228,6 +228,57 @@ test_utils.run_test("get_cell_height: squeeze=false → full height even for mai
     test_utils.assert_eq(result, non_punct, "squeeze=false should return full height")
 end)
 
+-- clreq 上下文相关模式（squeeze-mode=context）：字幅由 ATTR_PUNCT_SQUEEZE
+-- 决定（1 + 千分比），与 legacy 的「按类型无条件半格」无关。
+test_utils.run_test("get_cell_height: context 模式无标注（汉字间标点）→ 满幅", function()
+    local constants = require("core.luatex-cn-constants")
+    local n = node.direct.new(node.id("glyph"))
+    node.direct.setfield(n, "font", 1)
+    node.direct.set_attribute(n, constants.ATTR_PUNCT_TYPE, 4) -- comma
+    node.direct.set_attribute(n, constants.ATTR_PUNCT_SQUEEZE, 1) -- 收回 0
+    local grid_h = 65536 * 20
+    local cfg = { style = "mainland", squeeze = true, squeeze_mode = "context" }
+    local result = helpers.get_cell_height(n, grid_h, cfg)
+    local n2 = node.direct.new(node.id("glyph"))
+    node.direct.setfield(n2, "font", 1)
+    test_utils.assert_eq(result, helpers.get_cell_height(n2, grid_h, nil),
+        "context 模式下未标注收回量的标点应占满一字幅")
+end)
+
+test_utils.run_test("get_cell_height: context 模式按标注收回量缩短字幅", function()
+    local constants = require("core.luatex-cn-constants")
+    local grid_h = 65536 * 20
+    local cfg = { style = "mainland", squeeze = true, squeeze_mode = "context" }
+    local base = node.direct.new(node.id("glyph"))
+    node.direct.setfield(base, "font", 1)
+    local full = helpers.get_cell_height(base, grid_h, nil)
+    for permille, ratio in pairs({ [251] = 0.25, [501] = 0.5 }) do
+        local n = node.direct.new(node.id("glyph"))
+        node.direct.setfield(n, "font", 1)
+        node.direct.set_attribute(n, constants.ATTR_PUNCT_TYPE, 1) -- open
+        node.direct.set_attribute(n, constants.ATTR_PUNCT_SQUEEZE, permille)
+        local got = helpers.get_cell_height(n, grid_h, cfg)
+        test_utils.assert_true(math.abs(got - full * (1 - ratio)) <= 1,
+            string.format("收回 %.2f em：期望 %d，实得 %d",
+                ratio, math.floor(full * (1 - ratio) + 0.5), got))
+    end
+end)
+
+test_utils.run_test("get_cell_height: 台式在 context 模式下同样按标注缩减", function()
+    local constants = require("core.luatex-cn-constants")
+    local n = node.direct.new(node.id("glyph"))
+    node.direct.setfield(n, "font", 1)
+    node.direct.set_attribute(n, constants.ATTR_PUNCT_TYPE, 2) -- close
+    node.direct.set_attribute(n, constants.ATTR_PUNCT_SQUEEZE, 251)
+    local grid_h = 65536 * 20
+    local got = helpers.get_cell_height(n, grid_h,
+        { style = "taiwan", squeeze = true, squeeze_mode = "context" })
+    local n2 = node.direct.new(node.id("glyph"))
+    node.direct.setfield(n2, "font", 1)
+    test_utils.assert_true(got < helpers.get_cell_height(n2, grid_h, nil),
+        "clreq 连续标点缩减不分风格，台式亦适用")
+end)
+
 test_utils.run_test("get_cell_height: fullstop mainland mode → full height (no squeeze)", function()
     local constants = require("core.luatex-cn-constants")
     local n = node.direct.new(node.id("glyph"))
