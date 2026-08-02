@@ -522,10 +522,23 @@ local function annotate_context_squeeze(seq, ctx)
     if ctx.squeeze_mode ~= "context" or not ctx.squeeze then return 0 end
     local opts = squeeze_opts(ctx)
     local count = 0
+    -- 脚注标号组（︻一︼）整组不参与标点宽度调整：组内字幅由 flush_buffer 的
+    -- marker 预处理按组高分配，不是正文字幅，再叠加收回量会把组内的括号挤歪；
+    -- 组外的标点也不该把标号的括号当作行文中的夹注符号来做连续标点缩减
+    -- （clreq 的连续标点缩减针对夹注符号，注释记号是另一回事）。
+    -- 因此把整组视作不透明：组内不标注，组外判定时它既不是标点也不是汉字。
+    local is_marker = {}
     for i, item in ipairs(seq) do
-        if item.punct then
-            local prev_c = seq[i - 1] and seq[i - 1].char or nil
-            local next_c = seq[i + 1] and seq[i + 1].char or nil
+        local marker = D.get_attribute(item.node, constants.ATTR_FOOTNOTE_MARKER)
+        is_marker[i] = (marker and marker > 0) or false
+    end
+
+    for i, item in ipairs(seq) do
+        if item.punct and not is_marker[i] then
+            local prev_c = (not is_marker[i - 1]) and seq[i - 1]
+                and seq[i - 1].char or nil
+            local next_c = (not is_marker[i + 1]) and seq[i + 1]
+                and seq[i + 1].char or nil
             local plan = punct_squeeze.plan(prev_c, item.char, next_c, nil, opts)
             D.set_attribute(item.node, constants.ATTR_PUNCT_SQUEEZE,
                 1 + math.floor(plan.total * 1000 + 0.5))
