@@ -98,6 +98,11 @@ local resolve_cell_width = h.resolve_cell_width
 -- Gap between characters in natural mode = 10% of cell height (0.1em)
 local GAP_RATIO = 0.1
 
+-- 脚注标号组内数字的可读性下限（占自身字幅的比例）。低于此值时标号
+-- 按需增高，而不是把数字压成无法辨认的横条（【二百五十四】五个数字
+-- 挤进声明的两字幅时每个只有 0.35 字幅）。
+local MARKER_MIN_SCALE = 0.6
+
 -- Export _internal for testing
 local _internal = {}
 _internal.get_banxin_on = get_banxin_on
@@ -1937,6 +1942,17 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
                         local middle_total = total_h - 2 * bracket_h
                         local n_middle = glen - 2
                         local middle_h = math.floor(middle_total / n_middle)
+                        -- 可读性下限：位数多时（【二百五十四】共 5 个数字）
+                        -- 按声明高度均分会把每个数字压到三分之一字幅以下，
+                        -- 成为无法辨认的横条。低于下限时让标号按需增高——
+                        -- 一两位数的常见情形仍是声明的高度，脚注缩进按
+                        -- marker-height 对齐的约定不受影响。
+                        local own_h = get_node_font_size(col_buffer[gs + 1].node)
+                            or grid_height
+                        local min_middle_h = math.floor(own_h * MARKER_MIN_SCALE)
+                        if middle_h < min_middle_h then
+                            middle_h = min_middle_h
+                        end
                         col_buffer[gs].cell_height = bracket_h
                         for j = gs + 1, ge - 1 do
                             col_buffer[j].cell_height = middle_h
@@ -2077,20 +2093,45 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
                 end
                 local glen = ge - gs + 1
                 if glen >= 3 then
-                    local n_middle = glen - 2
-                    local middle_h = col_buffer[gs + 1].cell_height
-                    -- Scale middle chars when multi-char
-                    if n_middle > 1 and middle_h < grid_height then
-                        local mid_v_scale = middle_h / grid_height
-                        for j = gs + 1, ge - 1 do
-                            col_buffer[j].v_scale = mid_v_scale
+                    -- 每个字形按**真实墨迹**缩到分给它的格子里。以前只缩
+                    -- 中间字、且拿正文网格 grid_height 当参照系：括号从不
+                    -- 缩放，格子只有 12.5% 字幅而字形按原大绘制，墨迹侵入
+                    -- 相邻数字的格子——【一百】的「百」压进「︼」正是这么
+                    -- 来的；中间字的参照系也错（应为该字自身尺寸）。
+                    -- 墨迹本就装得下的（如单字标号）保持原大，只缩装不下的。
+                    --
+                    -- 墨迹必须取 boundingbox：height/depth 会把基线到墨迹
+                    -- 之间的空白算进去（︼ 的 depth 为 0、height 却是 0.668，
+                    -- 而墨迹只有 0.368），照它缩会让 ︻ ︼ 一大一小。
+                    local ink_shift = {}
+                    for j = gs, ge do
+                        local e = col_buffer[j]
+                        local fid = D.getfont(e.node)
+                        local fdata = fid and font.getfont(fid)
+                        local fs = get_node_font_size(e.node)
+                            or (fdata and fdata.size) or grid_height
+                        local top, bot = h.glyph_ink_span(e.node)
+                        local ink = (top - bot) * fs
+                        local cell = e.cell_height
+                        if ink > 0 and cell and cell > 0 and cell < ink then
+                            e.v_scale = cell / ink
+                        end
+                        -- 括号是标点，渲染按 height/depth 盒居中而不是按墨迹；
+                        -- 两个中心差多少就补多少，否则 ︻ ︼ 一高一低。
+                        local ptype = D.get_attribute(e.node, constants.ATTR_PUNCT_TYPE)
+                        if ptype and ptype > 0 then
+                            local box_center = ((D.getfield(e.node, "height") or 0)
+                                - (D.getfield(e.node, "depth") or 0)) / 2
+                            local ink_center = (top + bot) / 2 * fs
+                            ink_shift[j] = (ink_center - box_center) * (e.v_scale or 1)
                         end
                     end
-                    -- Fix y_sp: redistribute within group using pre-set cell_heights
+                    -- Fix y_sp: redistribute within group using pre-set cell_heights，
+                    -- 再叠加各自的墨迹居中补偿
                     local sy = col_buffer[gs].y_sp
                     local y = sy
                     for j = gs, ge do
-                        col_buffer[j].y_sp = y
+                        col_buffer[j].y_sp = y + (ink_shift[j] or 0)
                         y = y + col_buffer[j].cell_height
                     end
                 end

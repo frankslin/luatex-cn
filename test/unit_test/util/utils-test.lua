@@ -113,6 +113,21 @@ test_utils.run_test("to_chinese_numeral: hundreds", function()
     test_utils.assert_eq(utils.to_chinese_numeral(123), "一百二十三")
 end)
 
+test_utils.run_test("to_chinese_numeral: thousands", function()
+    -- 此前只写到 999，过千会取到 digits[nil] 直接报错
+    test_utils.assert_eq(utils.to_chinese_numeral(1000), "一千")
+    test_utils.assert_eq(utils.to_chinese_numeral(1005), "一千零五")
+    test_utils.assert_eq(utils.to_chinese_numeral(1050), "一千零五十")
+    test_utils.assert_eq(utils.to_chinese_numeral(1200), "一千二百")
+    test_utils.assert_eq(utils.to_chinese_numeral(1254), "一千二百五十四")
+    test_utils.assert_eq(utils.to_chinese_numeral(9999), "九千九百九十九")
+end)
+
+test_utils.run_test("to_chinese_numeral: 万以上退回逐位输出（不报错）", function()
+    test_utils.assert_eq(utils.to_chinese_numeral(10000), "一〇〇〇〇")
+    test_utils.assert_eq(utils.to_chinese_numeral(12345), "一二三四五")
+end)
+
 test_utils.run_test("to_chinese_numeral: zero/negative", function()
     test_utils.assert_eq(utils.to_chinese_numeral(0), "")
     test_utils.assert_eq(utils.to_chinese_numeral(-1), "")
