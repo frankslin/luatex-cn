@@ -895,8 +895,21 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                         end
                     end
 
-                    local dx = math.floor(grid_width * style_offset.x + 0.5)
-                    local dy = math.floor(grid_height * style_offset.y + 0.5)
+                    -- 偏靠量按**该字自身的字幅**计，不是版面网格：夹注、
+                    -- 批注、脚注等小字的字幅小于正文，用版面网格算会让小字
+                    -- 的标点偏出所在列（偏移量固定而字幅变小）。
+                    local own_w, own_h = grid_width, grid_height
+                    if fid then
+                        local fi = font.getfont(fid)
+                        local fs = fi and fi.size
+                        if fs and fs > 0 and grid_height > 0 then
+                            local scale = fs / grid_height
+                            own_w = grid_width * scale
+                            own_h = fs
+                        end
+                    end
+                    local dx = math.floor(own_w * style_offset.x + 0.5)
+                    local dy = math.floor(own_h * style_offset.y + 0.5)
 
                     D.setfield(t, "xoffset", cur_x + dx)
                     D.setfield(t, "yoffset", cur_y + dy)
