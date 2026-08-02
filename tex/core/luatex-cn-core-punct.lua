@@ -808,6 +808,51 @@ local MAINLAND_OFFSETS = {
     close    = { x = 0, y = 0 },       -- 」】）centered in cell by calc_grid_position
 }
 
+-- 度量驱动的字面分布（差距分析 4.1 第 5 条）：不再「经验偏移 + 部分字体
+-- 补偿」，而是直接把字形**墨迹**锚到字幅内的规范位置——锚点用墨迹中心
+-- 在 em 框内的坐标表示（x 从左、y 从基线向上，单位 em）。同一锚点对所有
+-- 字体成立：字体把墨迹画在哪无关紧要，量出来再挪过去。
+--
+-- 锚点值取自 TW-Kai 在旧实现（经验偏移路径）下的实测落点——该观感已经过
+-- 基线评审。旧实现 = 墨心对中 + 0.2×格宽右移（cn-vbook 版式合 0.857em）、
+-- 句号另加 0.25em 上移，故：
+--   x = 0.857：大陆式偏靠——墨心显著偏向字幅右缘（列的外侧），不是居中！
+--       （曾误取 0.49——那是从 Tm 相对坐标量的，而 xoffset 会写进 Tm，
+--       量出来的只是字形自身的 bbox 中心，偏靠被整个丢掉，回归为居中）
+--   y：句号 0.55（旧 +0.25em 上移的结果）、逗号顿号 0.31（旧无 y 移，
+--       取 TW-Kai 字形的自然位置，统一到所有字体）；
+--   中点类（：；？！）只做横向偏靠，纵向随字形设计（冒号居中、叹号通高，
+--       各有其位，不应统一挪动）。
+-- 无 boundingbox 可查时退回上面的经验偏移路径。
+local MAINLAND_INK_ANCHORS = {
+    fullstop = { x = 0.857, y = 0.55 },
+    comma    = { x = 0.857, y = 0.31 },
+    middle   = { x = 0.857 },
+}
+
+--- 度量驱动偏移：给定墨迹 bbox，算出把墨迹中心挪到锚点所需的位移。
+-- 纯函数，便于单测。
+-- @param ptype (string) 标点类别（fullstop/comma/middle/...）
+-- @param bb (table) 字形 boundingbox {xmin, ymin, xmax, ymax}（字体单位）
+-- @param upem (number) 字体 units_per_em
+-- @param em_sp (number) 该字形自身字号（sp）
+-- @return (number|nil, number) dx, dy（sp）；类别无锚点或数据不全时返回 nil
+local function mainland_ink_offsets(ptype, bb, upem, em_sp)
+    local anchor = ptype and MAINLAND_INK_ANCHORS[ptype]
+    if not anchor or not bb or not upem or upem <= 0 or not em_sp then
+        return nil, 0
+    end
+    if not (bb[1] and bb[3]) then return nil, 0 end
+    local cx = (bb[1] + bb[3]) / 2 / upem
+    local dx = math.floor((anchor.x - cx) * em_sp + 0.5)
+    local dy = 0
+    if anchor.y and bb[2] and bb[4] then
+        local cy = (bb[2] + bb[4]) / 2 / upem
+        dy = math.floor((anchor.y - cy) * em_sp + 0.5)
+    end
+    return dx, dy
+end
+
 -- Taiwan style: all punctuation centered in the grid cell (no extra offset)
 -- This is the default rendering behavior, so no offsets needed.
 
@@ -851,14 +896,33 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     local cur_x = D.getfield(t, "xoffset") or 0
                     local cur_y = D.getfield(t, "yoffset") or 0
 
+                    local char = D.getfield(t, "char")
+                    local fid = D.getfield(t, "font")
+
+                    -- 度量驱动路径：有墨迹 bbox 就直接锚定，跳过下面的
+                    -- 「经验偏移 + 字体补偿」。
+                    local metric_done = false
+                    if fid and char then
+                        local fi = font.getfont(fid)
+                        local desc = fi and fi.descriptions and fi.descriptions[char]
+                        local bb = desc and desc.boundingbox
+                        local upem = fi and fi.units_per_em or 1000
+                        local em_sp = fi and fi.size
+                        local dx, dy = mainland_ink_offsets(ptype, bb, upem, em_sp)
+                        if dx then
+                            D.setfield(t, "xoffset", cur_x + dx)
+                            D.setfield(t, "yoffset", cur_y + dy)
+                            count = count + 1
+                            metric_done = true
+                        end
+                    end
+
                     -- Font ink-center compensation: some fonts have punctuation
                     -- glyphs whose ink is not centered in the advance width.
                     -- Compensate so the glyph visually centers before applying
                     -- the mainland style offset.
-                    local char = D.getfield(t, "char")
-                    local fid = D.getfield(t, "font")
                     local glyph_width = grid_width -- fallback
-                    if fid and char then
+                    if not metric_done and fid and char then
                         local fi = font.getfont(fid)
                         local ci = fi and fi.characters and fi.characters[char]
                         if ci and ci.width then glyph_width = ci.width end
@@ -898,22 +962,24 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     -- 偏靠量按**该字自身的字幅**计，不是版面网格：夹注、
                     -- 批注、脚注等小字的字幅小于正文，用版面网格算会让小字
                     -- 的标点偏出所在列（偏移量固定而字幅变小）。
-                    local own_w, own_h = grid_width, grid_height
-                    if fid then
-                        local fi = font.getfont(fid)
-                        local fs = fi and fi.size
-                        if fs and fs > 0 and grid_height > 0 then
-                            local scale = fs / grid_height
-                            own_w = grid_width * scale
-                            own_h = fs
+                    if not metric_done then
+                        local own_w, own_h = grid_width, grid_height
+                        if fid then
+                            local fi = font.getfont(fid)
+                            local fs = fi and fi.size
+                            if fs and fs > 0 and grid_height > 0 then
+                                local scale = fs / grid_height
+                                own_w = grid_width * scale
+                                own_h = fs
+                            end
                         end
-                    end
-                    local dx = math.floor(own_w * style_offset.x + 0.5)
-                    local dy = math.floor(own_h * style_offset.y + 0.5)
+                        local dx = math.floor(own_w * style_offset.x + 0.5)
+                        local dy = math.floor(own_h * style_offset.y + 0.5)
 
-                    D.setfield(t, "xoffset", cur_x + dx)
-                    D.setfield(t, "yoffset", cur_y + dy)
-                    count = count + 1
+                        D.setfield(t, "xoffset", cur_x + dx)
+                        D.setfield(t, "yoffset", cur_y + dy)
+                        count = count + 1
+                    end
                 end
             end
         end
@@ -933,6 +999,8 @@ punct._internal = {
     parse_tounicode = parse_tounicode,
     resolve_original_codepoint = resolve_original_codepoint,
     get_ink_center_ratio = get_ink_center_ratio,
+    mainland_ink_offsets = mainland_ink_offsets,
+    MAINLAND_INK_ANCHORS = MAINLAND_INK_ANCHORS,
     INK_CENTER_CHARS = INK_CENTER_CHARS,
     font_tounicode_cache = font_tounicode_cache,
     font_ink_center_cache = font_ink_center_cache,

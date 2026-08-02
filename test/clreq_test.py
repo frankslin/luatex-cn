@@ -303,8 +303,8 @@ class Column:
         直排的大陆式点号在渲染时另有偏靠位移（字面偏右上），所以「标点占
         几个字幅」要用它**两侧汉字**的基线距离来量，而不是标点自身的位移。
         """
-        (_, y0, em) = self.glyphs[i]
-        (_, y1, _e) = self.glyphs[j]
+        (_, y0, em) = self.glyphs[i][:3]
+        (_, y1, _e) = self.glyphs[j][:3]
         return (y0 - y1) / em
 
     def index_of(self, sub, occurrence=0):
@@ -323,7 +323,7 @@ class Column:
         直排下引擎给每个字形单独定位，字幅（cell）挤压直接体现为步长缩短，
         因此步长比值就是 clreq「标点占几个字幅」的可度量形式。
         """
-        (_, y0, em), (_, y1, _e) = self.glyphs[i], self.glyphs[i + 1]
+        (_, y0, em), (_, y1, _e) = self.glyphs[i][:3], self.glyphs[i + 1][:3]
         return (y0 - y1) / em
 
 
@@ -353,7 +353,7 @@ def parse_pdf_vertical(path, min_len=4):
             cur.page = page
             cur_page = page
             out.append(cur)
-        cur.glyphs.append((ch, y, em))
+        cur.glyphs.append((ch, y, em, x))
     for col in out:
         col.glyphs.sort(key=lambda t: -t[1])
     return [c for c in out if len(c.glyphs) >= min_len]
@@ -803,6 +803,34 @@ def run_vertical_assertions(cols):
             f"相位扫描扫到列末边界 {len(squeezed)} 次，逗号均被挤进本列"
             f"（列长 {[len(c.glyphs) for c in squeezed]}）",
             len(squeezed) >= 1)
+
+    # ---- ⑤bis 大陆式偏靠（回归守卫）：点号与中点类的 Tm 原点应显著
+    #      偏向列的外侧（右）。字面分布改度量驱动时曾把锚点误取为字形
+    #      bbox 中心（0.49），偏靠整个丢失、标点回归为居中——TW-Kai 的
+    #      vert 形墨迹近似居中（cx≈0.5），偏靠必然体现在 xoffset 上，
+    #      而 xoffset 写进 Tm，故可直接断言 Tm 的 x 位移。
+    marks_checked = 0
+    for col in cols:
+        hanzi_x = None
+        for g in col.glyphs:
+            if g[0] in "温故知新可以为师金木水火土子曰学而时习之":
+                hanzi_x = g[3]
+                break
+        if hanzi_x is None:
+            continue
+        for g in col.glyphs:
+            if g[0] in "，。、：；？！":
+                off = (g[3] - hanzi_x) / g[2]
+                r.check("大陆式偏靠",
+                        f"「{g[0]}」Tm 原点右移 {off:+.3f}em（应 > 0.2，居中即回归）",
+                        off > 0.2)
+                marks_checked += 1
+                if marks_checked >= 6:
+                    break
+        if marks_checked >= 6:
+            break
+    r.check("大陆式偏靠", f"抽查了 {marks_checked} 个点号（应 ≥ 4）",
+            marks_checked >= 4)
 
     # ---- ⑥ 解析器：cm 缩放字形的坐标（锁住解析器对 cm 级联的跟踪）
     #      脚注标号组以 q <sx> 0 0 <sy> <ox> <oy> cm 缩放绘制，Tm 里只有
