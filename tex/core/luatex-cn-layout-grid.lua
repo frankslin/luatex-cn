@@ -98,6 +98,10 @@ local resolve_cell_width = h.resolve_cell_width
 -- Gap between characters in natural mode = 10% of cell height (0.1em)
 local GAP_RATIO = 0.1
 
+-- 脚注标号组内数字的可读性下限（占自身字幅的比例）。低于此值时标号
+-- 按需增高，而不是把数字压成无法辨认的横条（【二百五十四】五个数字
+-- 挤进声明的两字幅时每个只有 0.35 字幅）。
+local MARKER_MIN_SCALE = 0.6
 
 -- Export _internal for testing
 local _internal = {}
@@ -1938,6 +1942,17 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
                         local middle_total = total_h - 2 * bracket_h
                         local n_middle = glen - 2
                         local middle_h = math.floor(middle_total / n_middle)
+                        -- 可读性下限：位数多时（【二百五十四】共 5 个数字）
+                        -- 按声明高度均分会把每个数字压到三分之一字幅以下，
+                        -- 成为无法辨认的横条。低于下限时让标号按需增高——
+                        -- 一两位数的常见情形仍是声明的高度，脚注缩进按
+                        -- marker-height 对齐的约定不受影响。
+                        local own_h = get_node_font_size(col_buffer[gs + 1].node)
+                            or grid_height
+                        local min_middle_h = math.floor(own_h * MARKER_MIN_SCALE)
+                        if middle_h < min_middle_h then
+                            middle_h = min_middle_h
+                        end
                         col_buffer[gs].cell_height = bracket_h
                         for j = gs + 1, ge - 1 do
                             col_buffer[j].cell_height = middle_h
