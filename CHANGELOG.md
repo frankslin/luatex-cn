@@ -27,6 +27,7 @@
 
 变更：
 - 竖排标点宽度调整改为上下文相关（clreq）— 夹在汉字之间的单个标点占满一字幅，只有相邻标点连排才缩减（夹注符号参与时 2→1.5 字幅，可用 adjacent-punct=1 收到 1 字幅）。按文档类分档：ltc-cn-vbook / ltc-tw-vbook 默认启用（squeeze-mode=context），ltc-guji 保持原有无条件挤压（squeeze-mode=legacy），古籍三套基线零变化；vbook 相关基线与史记卷十六·现代示例已重存。挤压方向按 clreq「空白在哪一侧就往哪边让」：大陆式点号收回末端空白后字面原地不动、后一符号上移，开始夹注符号收回始端空白后字面向后贴紧被夹注内容
+- 脚注标号两侧间距改为「前紧后松」— 标号语义上依附前面被标注的内容，故标号前收到 0.05 字幅（紧贴前文）、标号后放到 0.30 字幅（与后文分开），两侧均按标号自身字号计算；标号后紧跟标点时（「黃︻一︼，」）二者同属依附前文的收尾单元，仍按普通字距不拉开。此前两侧都是 0.1 字幅，︼ 会与紧随其后的墨围方框边线贴死。仅自然排版（ltc-cn-vbook / ltc-tw-vbook）生效，网格模式的古籍基线不变
 - 标点风格预设与横排统一 — \标点设置 新增 style(mainland|taiwan|none)、squeeze-mode、adjacent-punct、line-start-bracket、line-end-punct 五个键，键名与取值同 luatex-cn-hori；style=none 为 clreq「不调整」预设（既不挤压也不偏靠）
 
 维护：

@@ -103,6 +103,23 @@ local GAP_RATIO = 0.1
 -- 挤进声明的两字幅时每个只有 0.35 字幅）。
 local MARKER_MIN_SCALE = 0.6
 
+-- 脚注标号在语义上依附于**前面**的内容（它标的是刚读过的那个词），
+-- 所以前紧后松：前面几乎不留空，后面留出比正常字距更宽的一点空隙，
+-- 让「…三嬗，︻一︼｜自生民以來」读起来是「，︻一︼」成一组。
+-- 两侧都用标号自身的字号作基准（标号用脚注字号，比正文小）。
+local MARKER_GAP_BEFORE_RATIO = 0.05
+local MARKER_GAP_AFTER_RATIO = 0.30
+
+--- 标号组两侧的固定间距（sp）
+--- @param base number 标号自身的字幅（sp）
+--- @param side string "before"（被标注内容 → 标号）或 "after"（标号 → 后文）
+--- @return number
+local function marker_gap_sp(base, side)
+    local ratio = (side == "after") and MARKER_GAP_AFTER_RATIO
+        or MARKER_GAP_BEFORE_RATIO
+    return math.floor(base * ratio)
+end
+
 -- Export _internal for testing
 local _internal = {}
 _internal.get_banxin_on = get_banxin_on
@@ -111,6 +128,8 @@ _internal.get_margin_right = get_margin_right
 _internal.get_chapter_title = get_chapter_title
 _internal.is_reserved_col = is_reserved_col
 _internal.is_center_gap_col = is_center_gap_col
+_internal.marker_gap_sp = marker_gap_sp
+_internal.GAP_RATIO = GAP_RATIO
 
 local function create_grid_context(params, line_limit, p_cols)
     -- Use helper for chapter_title (from params only, no _G fallback)
@@ -1990,14 +2009,24 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
                     gap_fixed[i] = 0
                 elseif (cur_is_marker and cur_is_marker > 0)
                     and not (nxt_is_marker and nxt_is_marker > 0) then
-                    -- Marker end → next element: fixed small gap
-                    local fg = math.floor(grid_height * GAP_RATIO)
+                    -- Marker end → next element: 后松（与后文分开）。
+                    -- 但后面若紧跟标点（「…黃︻一︼，」），标号与该标点同属
+                    -- 依附前文的收尾单元，中间不拉开，仍按普通字距。
+                    local nxt_punct = D.get_attribute(nxt.node, constants.ATTR_PUNCT_TYPE)
+                    local base = get_node_font_size(e.node) or grid_height
+                    local fg
+                    if nxt_punct and nxt_punct > 0 then
+                        fg = math.floor(base * GAP_RATIO)
+                    else
+                        fg = marker_gap_sp(base, "after")
+                    end
                     is_stretchable[i] = false
                     gap_fixed[i] = fg
                     total_fixed_gaps = total_fixed_gaps + fg
                 elseif (nxt_is_marker and nxt_is_marker > 0) then
-                    -- Before marker group start: same fixed small gap
-                    local fg = math.floor(grid_height * GAP_RATIO)
+                    -- Before marker group start: 前紧（贴住被标注的内容）
+                    local base = get_node_font_size(nxt.node) or grid_height
+                    local fg = marker_gap_sp(base, "before")
                     is_stretchable[i] = false
                     gap_fixed[i] = fg
                     total_fixed_gaps = total_fixed_gaps + fg
