@@ -28,7 +28,9 @@ import tempfile
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FONTS = os.path.join(REPO, "test", "fonts")
 
-SAMPLE = "温故知新，可以为师。甲乙：丙丁；戊己？庚辛！「引文」既出，『书』载之。"
+SAMPLE = ("温故知新，可以为师。甲乙：丙丁；戊己？庚辛！「引文」既出，"
+          "『书』载之。寒来暑往，秋收冬藏；闰余成岁，律吕调阳。云腾致雨？"
+          "露结为霜！金生丽水，玉出昆冈。剑号巨阙，珠称夜光。")
 
 VERT_TPL = r"""\directlua{pdf.setcompresslevel(0) pdf.setobjcompresslevel(0)}
 \documentclass{%(cls)s}

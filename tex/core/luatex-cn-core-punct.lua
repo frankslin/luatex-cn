@@ -25,6 +25,7 @@ local constants = require('core.luatex-cn-constants')
 local debug_mod = require('debug.luatex-cn-debug')
 local shared_punct = require('shared.luatex-cn-punct-table')
 local punct_squeeze = require('shared.luatex-cn-punct-squeeze')
+local punct_anchors = require('shared.luatex-cn-punct-anchors')
 local dbg = debug_mod.get_debugger('punct')
 
 -- ============================================================================
@@ -809,57 +810,20 @@ local MAINLAND_OFFSETS = {
 }
 
 -- 度量驱动的字面分布（差距分析 4.1 第 5 条）：不再「经验偏移 + 部分字体
--- 补偿」，而是直接把字形**墨迹**锚到字幅内的规范位置——锚点用墨迹中心
--- 在 em 框内的坐标表示（x 从左、y 从基线向上，单位 em）。同一锚点对所有
--- 字体成立：字体把墨迹画在哪无关紧要，量出来再挪过去。
---
--- 锚点值取自 TW-Kai 在旧实现（经验偏移路径）下的实测落点——该观感已经过
--- 基线评审。旧实现 = 墨心对中 + 0.2×格宽右移（cn-vbook 版式合 0.857em）、
--- 句号另加 0.25em 上移，故：
---   x = 0.857：大陆式偏靠——墨心显著偏向字幅右缘（列的外侧），不是居中！
---       （曾误取 0.49——那是从 Tm 相对坐标量的，而 xoffset 会写进 Tm，
---       量出来的只是字形自身的 bbox 中心，偏靠被整个丢掉，回归为居中）
---   y：句号 0.55（旧 +0.25em 上移的结果）、逗号顿号 0.31（旧无 y 移，
---       取 TW-Kai 字形的自然位置，统一到所有字体）；
---   中点类（：；？！）只做横向偏靠，纵向随字形设计（冒号居中、叹号通高，
---       各有其位，不应统一挪动）。
--- 无 boundingbox 可查时退回上面的经验偏移路径。
-local MAINLAND_INK_ANCHORS = {
-    fullstop = { x = 0.857, y = 0.55 },
-    comma    = { x = 0.857, y = 0.31 },
-    middle   = { x = 0.857 },
-}
-
---- 度量驱动偏移：给定墨迹 bbox，算出把墨迹中心挪到锚点所需的位移。
--- 纯函数，便于单测。
--- @param ptype (string) 标点类别（fullstop/comma/middle/...）
--- @param bb (table) 字形 boundingbox {xmin, ymin, xmax, ymax}（字体单位）
--- @param upem (number) 字体 units_per_em
--- @param em_sp (number) 该字形自身字号（sp）
--- @return (number|nil, number) dx, dy（sp）；类别无锚点或数据不全时返回 nil
-local function mainland_ink_offsets(ptype, bb, upem, em_sp)
-    local anchor = ptype and MAINLAND_INK_ANCHORS[ptype]
-    if not anchor or not bb or not upem or upem <= 0 or not em_sp then
-        return nil, 0
-    end
-    if not (bb[1] and bb[3]) then return nil, 0 end
-    local cx = (bb[1] + bb[3]) / 2 / upem
-    local dx = math.floor((anchor.x - cx) * em_sp + 0.5)
-    local dy = 0
-    if anchor.y and bb[2] and bb[4] then
-        local cy = (bb[2] + bb[4]) / 2 / upem
-        dy = math.floor((anchor.y - cy) * em_sp + 0.5)
-    end
-    return dx, dy
-end
-
--- Taiwan style: all punctuation centered in the grid cell (no extra offset)
--- This is the default rendering behavior, so no offsets needed.
+-- 补偿」，而是直接把字形**墨迹**锚到字幅内的规范位置。锚点表与位移计算
+-- 在共享层 shared/luatex-cn-punct-anchors.lua（HR5：clreq 规则只写在
+-- tex/shared/，横排 hori-pipeline 用同一模块）：
+--   大陆式直排：点号偏靠右上（x=0.857，贴前字）；
+--   台湾式：字面居中——**字体自己居不居中无所谓**：大陆惯例设计的字体
+--   （思源宋体、京華老宋体）横排形在左下、vert 形在右上，不锚定的话
+--   台湾式版面会随字体漂移。
+-- 教训：锚点不能从 Tm 相对坐标量——xoffset 会写进 Tm，量出来的只是
+-- 字形自身的 bbox 中心，偏靠会整个丢失、退化为居中。
+-- 无 boundingbox 可查时，大陆式退回上面的经验偏移路径，台湾式不动。
 
 --- Render stage: apply punctuation style offsets
--- For mainland style, shifts dot-class punctuation (fullstop, comma)
--- toward the upper-right corner of the character grid.
--- Taiwan style leaves punctuation centered (no adjustments).
+-- Anchors the ink of dot/middle punctuation per style (mainland 偏靠 /
+-- taiwan 居中). style=none is the clreq 不调整 preset — no offsets.
 -- @param head (node) The page node list head
 -- @param layout_map (table) Layout map
 -- @param render_ctx (table) Render context
@@ -871,9 +835,12 @@ end
 function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p_total_cols)
     if not ctx then return head end
 
-    -- Taiwan style: no adjustments needed (punctuation centered by default);
-    -- style=none is the clreq 不调整 preset — likewise no offsets.
-    if ctx.style ~= "mainland" then return head end
+    -- style=none：clreq 不调整预设，字面不挪动。
+    -- 台湾式的度量锚定只在 context 挡位（vbook 类）启用：ltc-guji 默认
+    -- taiwan + legacy，字面位置维持字体原样（R5：古籍版面不动）。
+    -- 大陆式沿 #138 的口径不加挡位（现存大陆式文档类均为 context）。
+    local do_taiwan = (ctx.style == "taiwan" and ctx.squeeze_mode == "context")
+    if ctx.style ~= "mainland" and not do_taiwan then return head end
 
     -- Mainland style: offset dot-class punctuation
     local grid_width = engine_ctx.g_width
@@ -900,7 +867,9 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     local fid = D.getfield(t, "font")
 
                     -- 度量驱动路径：有墨迹 bbox 就直接锚定，跳过下面的
-                    -- 「经验偏移 + 字体补偿」。
+                    -- 「经验偏移 + 字体补偿」。锚点表按**原始码位**查
+                    -- （vert GSUB 落到 PUA 的字形先解析回来），bbox 用
+                    -- 实际绘制的字形查。
                     local metric_done = false
                     if fid and char then
                         local fi = font.getfont(fid)
@@ -908,7 +877,12 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                         local bb = desc and desc.boundingbox
                         local upem = fi and fi.units_per_em or 1000
                         local em_sp = fi and fi.size
-                        local dx, dy = mainland_ink_offsets(ptype, bb, upem, em_sp)
+                        local orig = char
+                        if char >= 0xE000 then
+                            orig = resolve_original_codepoint(fid, char) or char
+                        end
+                        local dx, dy = punct_anchors.offsets(
+                            orig, ctx.style, "vertical", bb, upem, em_sp)
                         if dx then
                             D.setfield(t, "xoffset", cur_x + dx)
                             D.setfield(t, "yoffset", cur_y + dy)
@@ -921,8 +895,9 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     -- glyphs whose ink is not centered in the advance width.
                     -- Compensate so the glyph visually centers before applying
                     -- the mainland style offset.
+                    -- 经验偏移是大陆式的退路；台湾式无 bbox 时不动（字体原样）。
                     local glyph_width = grid_width -- fallback
-                    if not metric_done and fid and char then
+                    if not metric_done and ctx.style == "mainland" and fid and char then
                         local fi = font.getfont(fid)
                         local ci = fi and fi.characters and fi.characters[char]
                         if ci and ci.width then glyph_width = ci.width end
@@ -962,7 +937,7 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     -- 偏靠量按**该字自身的字幅**计，不是版面网格：夹注、
                     -- 批注、脚注等小字的字幅小于正文，用版面网格算会让小字
                     -- 的标点偏出所在列（偏移量固定而字幅变小）。
-                    if not metric_done then
+                    if not metric_done and ctx.style == "mainland" then
                         local own_w, own_h = grid_width, grid_height
                         if fid then
                             local fi = font.getfont(fid)
@@ -999,8 +974,6 @@ punct._internal = {
     parse_tounicode = parse_tounicode,
     resolve_original_codepoint = resolve_original_codepoint,
     get_ink_center_ratio = get_ink_center_ratio,
-    mainland_ink_offsets = mainland_ink_offsets,
-    MAINLAND_INK_ANCHORS = MAINLAND_INK_ANCHORS,
     INK_CENTER_CHARS = INK_CENTER_CHARS,
     font_tounicode_cache = font_tounicode_cache,
     font_ink_center_cache = font_ink_center_cache,

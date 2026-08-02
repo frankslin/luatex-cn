@@ -619,63 +619,82 @@ test_utils.run_test("flatten: legacy 模式不写收回量属性", function()
 end)
 
 -- ============================================================================
--- mainland_ink_offsets: 度量驱动的字面分布（差距分析 4.1 第 5 条）
+-- 度量驱动的字面分布（共享层 punct-anchors，差距分析 4.1 第 5 条）
 -- ============================================================================
 
-test_utils.run_test("mainland_ink_offsets: 墨迹中心挪到锚点", function()
-    local f = punct._internal.mainland_ink_offsets
-    local anchors = punct._internal.MAINLAND_INK_ANCHORS
+local anchors = require("shared.luatex-cn-punct-anchors")
+
+test_utils.run_test("anchors: 大陆式直排——墨心挪到偏靠锚点", function()
     local em = 655360   -- 10pt
     -- KingHwa 逗号实测 bbox（横排形，墨迹在左下）：{103,-107,309,248}/1000
-    local dx, dy = f("comma", { 103, -107, 309, 248 }, 1000, em)
+    local dx, dy = anchors.offsets(0xFF0C, "mainland", "vertical",
+        { 103, -107, 309, 248 }, 1000, em)
+    local a = anchors.anchor(0xFF0C, "mainland", "vertical")
     -- cx = 0.206 / cy = 0.0705 → 位移 = 锚点 − 墨心
-    test_utils.assert_near(dx / em, anchors.comma.x - 0.206, 0.001)
-    test_utils.assert_near(dy / em, anchors.comma.y - 0.0705, 0.001)
-    -- 大陆式是**偏靠**不是居中：锚点必须显著偏向字幅右缘（回归守卫——
-    -- 曾误取 bbox 中心 0.49 当锚点，偏靠整个丢失）
-    test_utils.assert_true(anchors.comma.x > 0.7,
-        "comma 锚点应偏右（大陆式偏靠），不是居中")
-    test_utils.assert_true(anchors.fullstop.x > 0.7,
-        "fullstop 锚点应偏右（大陆式偏靠），不是居中")
-    test_utils.assert_true(anchors.middle.x > 0.7,
-        "middle 锚点应偏右（大陆式偏靠），不是居中")
-    -- 句号在右上：y 锚点高于逗号
-    test_utils.assert_true(anchors.fullstop.y > anchors.comma.y)
+    test_utils.assert_near(dx / em, a.x - 0.206, 0.001)
+    test_utils.assert_near(dy / em, a.y - 0.0705, 0.001)
 end)
 
-test_utils.run_test("mainland_ink_offsets: 墨迹已在锚点时位移为零", function()
-    local f = punct._internal.mainland_ink_offsets
-    local a = punct._internal.MAINLAND_INK_ANCHORS.fullstop
-    -- 构造一个墨迹中心恰在锚点的 bbox（±0.1em）
-    local bb = { (a.x - 0.1) * 1000, (a.y - 0.1) * 1000,
-                 (a.x + 0.1) * 1000, (a.y + 0.1) * 1000 }
-    local dx, dy = f("fullstop", bb, 1000, 655360)
+test_utils.run_test("anchors: 大陆式直排是偏靠不是居中（回归守卫）", function()
+    -- 曾误取字形 bbox 中心（0.49）当锚点，偏靠整个丢失、退化为居中
+    for _, c in ipairs({ 0xFF0C, 0x3001, 0x3002, 0xFF1A, 0xFF1B, 0xFF01, 0xFF1F }) do
+        local a = anchors.anchor(c, "mainland", "vertical")
+        test_utils.assert_true(a.x > 0.7,
+            string.format("U+%04X 直排大陆锚点应偏右", c))
+    end
+    -- 句号在右上：y 锚点高于逗号
+    test_utils.assert_true(anchors.anchor(0x3002, "mainland", "vertical").y
+        > anchors.anchor(0xFF0C, "mainland", "vertical").y)
+end)
+
+test_utils.run_test("anchors: 台湾式居中，横竖同值（TW-Kai 样板零位移）", function()
+    for _, mode in ipairs({ "vertical", "horizontal" }) do
+        for _, c in ipairs({ 0xFF0C, 0x3002, 0xFF1F }) do
+            local a = anchors.anchor(c, "taiwan", mode)
+            test_utils.assert_true(math.abs(a.x - 0.5) < 0.05,
+                string.format("U+%04X 台湾式锚点应居中", c))
+        end
+    end
+    -- 样板字体（TW-Kai）自身位移应为零：锚点即其实测墨心
+    -- TW-Kai ，bbox 中心 (0.495, 0.311)/em
+    local dx, dy = anchors.offsets(0xFF0C, "taiwan", "vertical",
+        { 425, 241, 565, 381 }, 1000, 655360)  -- 中心恰 (0.495, 0.311)
     test_utils.assert_eq(dx, 0)
     test_utils.assert_eq(dy, 0)
 end)
 
-test_utils.run_test("mainland_ink_offsets: middle 类只做横向偏靠", function()
-    local f = punct._internal.mainland_ink_offsets
-    local anchors = punct._internal.MAINLAND_INK_ANCHORS
-    -- KingHwa 冒号 bbox {177,-50,336,317}：横向中心 0.2565，纵向不动
-    local dx, dy = f("middle", { 177, -50, 336, 317 }, 1000, 655360)
-    test_utils.assert_near(dx / 655360, anchors.middle.x - 0.2565, 0.001)
-    test_utils.assert_eq(dy, 0, "middle 类纵向应随字形设计，不挪动")
+test_utils.run_test("anchors: 大陆式横排靠左下（思源宋体样板）", function()
+    for _, c in ipairs({ 0xFF0C, 0x3001, 0x3002 }) do
+        local a = anchors.anchor(c, "mainland", "horizontal")
+        test_utils.assert_true(a.x < 0.3,
+            string.format("U+%04X 横排大陆锚点应偏左", c))
+        test_utils.assert_true(a.y < 0.15,
+            string.format("U+%04X 横排大陆锚点应偏下", c))
+    end
+    -- 样板字体（思源宋体）自身位移为零：，bbox 中心 (0.153, -0.039)
+    local dx, dy = anchors.offsets(0xFF0C, "mainland", "horizontal",
+        { 103, -89, 203, 11 }, 1000, 655360)  -- 中心恰 (0.153, -0.039)
+    test_utils.assert_eq(dx, 0)
+    test_utils.assert_eq(dy, 0)
 end)
 
-test_utils.run_test("mainland_ink_offsets: 无锚点类别 / 数据不全时返回 nil", function()
-    local f = punct._internal.mainland_ink_offsets
-    test_utils.assert_nil((f("open", { 0, 0, 500, 500 }, 1000, 655360)))
-    test_utils.assert_nil((f("comma", nil, 1000, 655360)))
-    test_utils.assert_nil((f("comma", { 0, 0, 500, 500 }, 0, 655360)))
-    test_utils.assert_nil((f("comma", { 0, 0, 500, 500 }, 1000, nil)))
+test_utils.run_test("anchors: none 预设 / 未收录码位 / 数据不全时返回 nil", function()
+    test_utils.assert_nil((anchors.offsets(0xFF0C, "none", "vertical",
+        { 0, 0, 500, 500 }, 1000, 655360)))
+    test_utils.assert_nil((anchors.offsets(0x300C, "mainland", "vertical",
+        { 0, 0, 500, 500 }, 1000, 655360)))   -- 「 夹注符号无锚点
+    test_utils.assert_nil((anchors.offsets(0xFF0C, "mainland", "vertical",
+        nil, 1000, 655360)))
+    test_utils.assert_nil((anchors.offsets(0xFF0C, "mainland", "vertical",
+        { 0, 0, 500, 500 }, 0, 655360)))
+    test_utils.assert_nil((anchors.offsets(0xFF0C, "mainland", "vertical",
+        { 0, 0, 500, 500 }, 1000, nil)))
 end)
 
-test_utils.run_test("mainland_ink_offsets: 按自身字号缩放（夹注小字）", function()
-    local f = punct._internal.mainland_ink_offsets
+test_utils.run_test("anchors: 按自身字号缩放（夹注小字）", function()
     local bb = { 103, -107, 309, 248 }
-    local dx1 = f("comma", bb, 1000, 655360)
-    local dx2 = f("comma", bb, 1000, 655360 * 2)
+    local dx1 = anchors.offsets(0xFF0C, "mainland", "vertical", bb, 1000, 655360)
+    local dx2 = anchors.offsets(0xFF0C, "mainland", "vertical", bb, 1000, 655360 * 2)
     test_utils.assert_near(dx2 / dx1, 2.0, 0.01)
 end)
 

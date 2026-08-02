@@ -8,6 +8,7 @@
 tex/shared/
 ├── luatex-cn-punct-table.lua   # clreq 附录标点全表（单一数据源）
 ├── luatex-cn-punct-squeeze.lua # 标点宽度调整的上下文判定
+├── luatex-cn-punct-anchors.lua # 字面分布的度量锚点（style × mode → 墨心目标位置）
 ├── luatex-cn-adjust.lua        # 一维优先级空间分配器
 └── luatex-cn-kinsoku.lua       # 四级禁则 + 符号分离禁则
 ```
@@ -133,6 +134,32 @@ clreq 只允许两种情形收回：① 相邻标点连排（夹注符号参与�
 竖排 `punct.flatten` 用 `plan`（相邻上下文），结果写在 `ATTR_PUNCT_SQUEEZE`。
 `ctx.at_line_start/at_line_end` 在竖排尚无人传——断列结果只有
 `flush_buffer` 知道，见 `docs/CLREQ-VERTICAL-ADJUST-DESIGN.md`。
+
+---
+
+## 1ter. punct-anchors.lua — 字面分布的度量锚点
+
+依赖为零（纯数据 + 一个纯函数）。回答的问题是「这个标点的**墨迹中心**
+在本 style × mode 下应落在字幅的哪里」。字体把墨迹画在哪是字体的设计
+惯例（大陆字体横排形在左下、vert 形在右上；台湾字体两向居中），排版
+风格不应随字体漂移——后端读字形 boundingbox 算墨心，把差值写进
+xoffset/yoffset。
+
+| 函数 | 返回 | 说明 |
+|------|------|------|
+| `anchor(orig, style, mode)` | {x, y} \| nil | 锚点（em，x 自左、y 自基线向上）；style="none" 或未收录码位 → nil；y=nil 表示纵向随字形 |
+| `offsets(orig, style, mode, bb, upem, em_sp)` | dx, dy（sp）\| nil | 把墨心挪到锚点的位移；含 0.002em 死区（样板字体严格零位移） |
+
+锚点值取自各风格的**样板字体实测**：台湾式 = TW-Kai（横竖同值），
+大陆式横排 = 思源宋体，大陆式直排 = TW-Kai 在旧经验偏移实现下的落点。
+键为**原始码位**——vert GSUB 落到 PUA 的字形由后端先解析回来。
+
+教训：锚点不能从 Tm 相对坐标量——xoffset 会写进 Tm，量出来的只是字形
+自身的 bbox 中心，偏靠会整个丢失、退化为居中。
+
+后端接线：竖排 `punct.render`（大陆式恒开；台湾式仅 squeeze-mode=context
+挡位，保护 ltc-guji 的既有版面），横排 `hori-pipeline.apply_ink_anchor`
+（pre_linebreak 对每个点号/中点类字形绝对写入，幂等）。
 
 ---
 
