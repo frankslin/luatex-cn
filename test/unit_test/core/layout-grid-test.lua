@@ -476,4 +476,37 @@ test_utils.run_test("check_natural_kinsoku: returns nil when buffer empty", func
     test_utils.assert_nil(layout_grid._internal.check_natural_kinsoku(t_node, ctx, {}, grid_height))
 end)
 
+-- ============================================================================
+-- marker_gap_sp: 脚注标号「前紧后松」
+-- ============================================================================
+
+test_utils.run_test("marker_gap_sp: 后侧间距大于前侧（标号依附前文）", function()
+    local em = 65536 * 11
+    local before = layout_grid._internal.marker_gap_sp(em, "before")
+    local after = layout_grid._internal.marker_gap_sp(em, "after")
+    test_utils.assert_true(after > before,
+        "标号后应比标号前留出更多空隙，才不会读成依附后文")
+end)
+
+test_utils.run_test("marker_gap_sp: 前侧紧于普通字距、后侧宽于普通字距", function()
+    local em = 65536 * 11
+    local normal = math.floor(em * layout_grid._internal.GAP_RATIO)
+    test_utils.assert_true(layout_grid._internal.marker_gap_sp(em, "before") < normal,
+        "标号前应比普通字距更紧")
+    test_utils.assert_true(layout_grid._internal.marker_gap_sp(em, "after") > normal,
+        "标号后应比普通字距更松，与被标注内容分开")
+end)
+
+test_utils.run_test("marker_gap_sp: 按传入字幅等比缩放", function()
+    local a = layout_grid._internal.marker_gap_sp(65536 * 10, "after")
+    local b = layout_grid._internal.marker_gap_sp(65536 * 20, "after")
+    test_utils.assert_near(b / a, 2.0, 0.01)
+end)
+
+test_utils.run_test("marker_gap_sp: 未知 side 按前侧处理", function()
+    local em = 65536 * 11
+    test_utils.assert_eq(layout_grid._internal.marker_gap_sp(em, nil),
+        layout_grid._internal.marker_gap_sp(em, "before"))
+end)
+
 print("\nAll core/layout-grid-test tests passed!")
