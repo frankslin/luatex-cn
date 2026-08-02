@@ -270,10 +270,26 @@ regression test」的既有纪律。各阶段工作量已按共享内核复用�
 
 ### P1 · 标点系统达标
 
+**进度：第一步已完成（上下文相关的宽度调整 + 风格预设联动）。**
+规则在 `tex/shared/luatex-cn-punct-squeeze.lua`（横竖排共用，横排
+`hori-spacing` 的连续标点缩减已改为调用它）；竖排由 `punct.flatten` 判定
+相邻上下文、写入 `ATTR_PUNCT_SQUEEZE`（总量）与 `ATTR_PUNCT_SQUEEZE_HEAD`
+（始端量），grid 与 natural 两条路径都据此缩短字幅；渲染按原始满幅定位再按
+始端量上移，保证「收回哪一侧的空白，字面就往哪边让」。按 R5 分档：`punct-squeeze` 新增 `squeeze-mode = legacy | context`，
+默认 `legacy`（`ltc-guji` 版面零变化，三套基线实测无差异），
+`ltc-cn-vbook` / `ltc-tw-vbook` 的配置里切到 `context`。
+用户键与横排同名同值：`style`(mainland|taiwan|none)、`adjacent-punct`、
+`line-start-bracket`、`line-end-punct`。
+竖排断言用例 `test/clreq_test/vert-punct.tex` + `run_vertical_assertions`
+（按列解析 PDF、以两侧汉字基线距离度量「占几个字幅」，并断言挤压方向）。
+**剩余**：行首/行尾这一半要等 P2 的 `flush_buffer` 接线才知道断列结果，
+设计见 `docs/CLREQ-VERTICAL-ADJUST-DESIGN.md`；下列其余条目未动。
+
 - 分类、宽度、可调空间全部改为从共享标点表（H0 `punct-table.lua`）派生，
   连接号、间隔号、分隔号、破折号/省略号（两字宽单元）、叹问号叠加等扩类随表获得。
-- 宽度调整改为上下文相关：仅在「相邻标点」与「行首/行尾」触发；实现 2→1.5 字宽原则调整，
-  并提供 `紧凑`（→1 字宽）风格开关；夹注符号挤压方向紧贴被夹注内容。
+- ✅ 宽度调整改为上下文相关：仅在「相邻标点」与「行首/行尾」触发；实现 2→1.5 字宽原则调整，
+  并提供 `紧凑`（→1 字宽）风格开关（`adjacent-punct=1`）；夹注符号挤压方向紧贴被夹注内容
+  （行首/行尾触发条件待 P2）。
 - 字面分布从经验偏移改为度量驱动（复用已有 ink-center 测量）。
 - 港台居中式与大陆偏靠式各自的「不可调整」集合（如直排的 `：；？！` 固定一字宽）。
 - `\着重号` 在 vbook 类默认改为实心圆点 `●/•`，并实现「标点上不加着重号」。
@@ -287,7 +303,8 @@ regression test」的既有纪律。各阶段工作量已按共享内核复用�
 本阶段是**竖排接线与双轨合并**：
 
 - 引入统一 cell 模型 `{size, shrink, stretch, priority}`，`flush_buffer` 前调用
-  H0 的共享求解器（`shared/adjust.lua`）。
+  H0 的共享求解器（`shared/adjust.lua`）——**接线设计见
+  `docs/CLREQ-VERTICAL-ADJUST-DESIGN.md`**（gap 组装、target 口径、迁移五步）。
 - 禁则接线：`shared/kinsoku.lua` 输出「挤进/推出」决策，替换现有贪心逻辑；
   「先挤进，后推出」两阶段；符号分离禁则。
 - 行尾点号悬挂（clreq：港台横排不宜、**可用于直排**——正是本项目主场；做成可开关）。

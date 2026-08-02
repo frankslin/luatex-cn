@@ -25,7 +25,13 @@
 - 操作系统探测改用 LuaTeX 全局变量 os.name，提升跨平台兼容性 (#100)
 - test/run_all.lua 失败漏报 — LuaTeX 的 os.execute 返回原始状态数字而非布尔值，此前任何单元测试失败都会被统计为通过 (#121)
 
+变更：
+- 竖排标点宽度调整改为上下文相关（clreq）— 夹在汉字之间的单个标点占满一字幅，只有相邻标点连排才缩减（夹注符号参与时 2→1.5 字幅，可用 adjacent-punct=1 收到 1 字幅）。按文档类分档：ltc-cn-vbook / ltc-tw-vbook 默认启用（squeeze-mode=context），ltc-guji 保持原有无条件挤压（squeeze-mode=legacy），古籍三套基线零变化；vbook 相关基线与史记卷十六·现代示例已重存。挤压方向按 clreq「空白在哪一侧就往哪边让」：大陆式点号收回末端空白后字面原地不动、后一符号上移，开始夹注符号收回始端空白后字面向后贴紧被夹注内容
+- 标点风格预设与横排统一 — \标点设置 新增 style(mainland|taiwan|none)、squeeze-mode、adjacent-punct、line-start-bracket、line-end-punct 五个键，键名与取值同 luatex-cn-hori；style=none 为 clreq「不调整」预设（既不挤压也不偏靠）
+
 维护：
+- clreq 共享层新增 tex/shared/luatex-cn-punct-squeeze.lua（标点宽度调整的上下文判定），横排 hori-spacing 的连续标点缩减改为调用它，规则不再有第二份拷贝
+- clreq 断言测试新增直排解析与用例 test/clreq_test/vert-punct.tex — 按列解析 PDF、以两侧汉字基线距离度量「标点占几个字幅」，13 条断言覆盖单个标点满幅、直排冒号/分号/问号固定一字幅、连续标点 1.5 字幅、挤压方向（只锁总宽锁不住方向），以及行首禁则（数字串长度递增扫过列末各相位，与列容量无关）
 - 竖排标点分类改为从 tex/shared/ 的共享标点表派生，横竖排规则收敛到单一数据源 (#126)
 - 示例 史记卷十六 录文、标点、用字依修订本底本校正，校勘记号〔一〕与注号【一】分列两套序列 (#124)
 - 新增 CLReq 差距分析与横排先行实施规划两份文档并随进度更新；README 首页定位改为可核查表述，补充横排 clreq 能力
