@@ -98,6 +98,7 @@ local resolve_cell_width = h.resolve_cell_width
 -- Gap between characters in natural mode = 10% of cell height (0.1em)
 local GAP_RATIO = 0.1
 
+
 -- Export _internal for testing
 local _internal = {}
 _internal.get_banxin_on = get_banxin_on
@@ -2077,13 +2078,20 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
                 end
                 local glen = ge - gs + 1
                 if glen >= 3 then
-                    local n_middle = glen - 2
-                    local middle_h = col_buffer[gs + 1].cell_height
-                    -- Scale middle chars when multi-char
-                    if n_middle > 1 and middle_h < grid_height then
-                        local mid_v_scale = middle_h / grid_height
-                        for j = gs + 1, ge - 1 do
-                            col_buffer[j].v_scale = mid_v_scale
+                    -- 每个字形按**自身墨迹**缩到分给它的格子里（height+depth
+                    -- 就是字形的墨迹盒）。以前只缩中间字、且拿正文网格
+                    -- grid_height 当参照系：括号从不缩放，格子只有 12.5%
+                    -- 字幅而字形按原大绘制，墨迹会侵入相邻数字的格子——
+                    -- 【一百】的「百」压进「】」正是这么来的；中间字的参照
+                    -- 系也错（应为该字自身尺寸，不是正文网格）。
+                    -- 墨迹本就装得下的（如单字标号）保持原大，只缩装不下的。
+                    for j = gs, ge do
+                        local e = col_buffer[j]
+                        local ink = (D.getfield(e.node, "height") or 0)
+                            + (D.getfield(e.node, "depth") or 0)
+                        local cell = e.cell_height
+                        if ink > 0 and cell and cell > 0 and cell < ink then
+                            e.v_scale = cell / ink
                         end
                     end
                     -- Fix y_sp: redistribute within group using pre-set cell_heights
