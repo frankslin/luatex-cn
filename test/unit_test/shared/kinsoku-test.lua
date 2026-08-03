@@ -182,4 +182,72 @@ test_utils.run_test("stacked ？！ reports unbreakable_pair, not forbid_start",
     test_utils.assert_eq(reason, "forbid_start")
 end)
 
+-- ============================================================================
+-- 挤进 / 推出决策（clreq 禁则的解决方式）
+-- ============================================================================
+
+-- 造一组「N 个字距」的候选：cells 已经从 target 里扣掉，这里只给 gap
+local function gaps_of(n, width, opts)
+    local t = {}
+    for _ = 1, n do
+        t[#t + 1] = { width = width, min = 0, max = width,
+                      shrink_class = opts and opts.class or "inter_char",
+                      fallback = opts == nil or opts.fallback ~= false }
+    end
+    return t
+end
+
+test_utils.run_test("resolve_overflow: 装不下就推出", function()
+    -- 挤进候选的 gap 全部压到 0 也超长 → 不可行
+    local action = kinsoku.resolve_overflow({
+        squeeze = { target = -5, gaps = gaps_of(4, 1) },
+        stretch = { target = 3, gaps = gaps_of(2, 1) },
+    })
+    test_utils.assert_eq(action, "stretch")
+end)
+
+test_utils.run_test("resolve_overflow: 形变小的一方胜出", function()
+    -- 挤进：4 个 1.0 的字距压成 0.9（形变 0.1）
+    -- 推出：2 个 1.0 的字距拉到 2.0（形变 1.0）
+    local action, d = kinsoku.resolve_overflow({
+        squeeze = { target = 3.6, gaps = gaps_of(4, 1) },
+        stretch = { target = 4.0, gaps = gaps_of(2, 1) },
+    })
+    test_utils.assert_eq(action, "squeeze")
+    test_utils.assert_true(d.squeeze_cost < d.stretch_cost)
+end)
+
+test_utils.run_test("resolve_overflow: 收标点空白比压字距便宜", function()
+    -- 同样要吞掉 0.5：挤进候选靠一个逗号空白（clreq 挤压第 5 级），
+    -- 推出候选靠字距（第 8 级，最后手段）。逗号那边应当胜出。
+    local squeeze = gaps_of(3, 1)
+    squeeze[#squeeze + 1] = { width = 0.5, min = 0, max = 0.5,
+                              shrink_class = "comma_group" }
+    local action, d = kinsoku.resolve_overflow({
+        squeeze = { target = 3.0, gaps = squeeze },   -- 收掉整个逗号空白
+        stretch = { target = 1.5, gaps = gaps_of(2, 1) },  -- 字距各压 0.25
+    })
+    test_utils.assert_eq(action, "squeeze")
+    test_utils.assert_true(d.squeeze_cost < d.stretch_cost)
+end)
+
+test_utils.run_test("resolve_overflow: 代价相等时先挤进（clreq 先挤进后推出）", function()
+    local action = kinsoku.resolve_overflow({
+        squeeze = { target = 2, gaps = gaps_of(2, 1) },
+        stretch = { target = 2, gaps = gaps_of(2, 1) },
+    })
+    test_utils.assert_eq(action, "squeeze")
+end)
+
+test_utils.run_test("resolve_overflow: 刚性 gap 不参与代价平均", function()
+    -- 全刚性的候选没有可比的形变，代价为 0
+    local rigid = { { width = 1, min = 1, max = 1 }, { width = 1, min = 1, max = 1 } }
+    local action, d = kinsoku.resolve_overflow({
+        squeeze = { target = 2, gaps = rigid },
+        stretch = { target = 1, gaps = gaps_of(2, 1) },
+    })
+    test_utils.assert_eq(d.squeeze_cost, 0)
+    test_utils.assert_eq(action, "squeeze")
+end)
+
 print("All kinsoku tests passed.")

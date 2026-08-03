@@ -34,6 +34,10 @@ M.SHRINK_ORDER = {
     "comma_group",     -- 5 逗号/顿号/分号
     "cjk_western",     -- 6 中西间距
     "fullstop_group",  -- 7 句号/问号/叹号
+    -- 8（超出 clreq 列举的七步）：字间距本身。clreq 假定行内密排，字距无可
+    -- 压缩；本项目直排以 0.1em 为基准字距，是本项目的版式选择，因此在 clreq
+    -- 七步全部耗尽后才允许压缩它，绝不能排在标点空白之前。横排不使用本类。
+    "inter_char",
 }
 
 -- clreq expansion priority (拉伸处理的优先顺序), before the fallback.

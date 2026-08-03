@@ -8,14 +8,16 @@
 --
 -- Pure Lua, zero TeX dependency. Outputs are backend-neutral:
 --   * horizontal backend: penalty_between() → TeX penalty value
---   * vertical backend:   check_wrap() → violation kind (the squeeze-in vs
---     push-out cost comparison stays in the backend)
+--   * vertical backend:   check_wrap() → violation kind, then
+--     resolve_overflow() → squeeze-in or push-out (代价比较基于 adjust.solve，
+--     后端只负责组装两个候选的 gap 序列)
 -- Interface contract: ai_must_read/clreq-shared-core.md
 --
 -- Superscript/subscript/annotation-mark separation rules need node
 -- attributes and therefore live in the backends, not here.
 
 local punct_table = require("shared.luatex-cn-punct-table")
+local adjust = require("shared.luatex-cn-adjust")
 
 local M = {}
 
@@ -190,8 +192,8 @@ end
 -- @param opts (table|nil) { level = ... }
 -- @return (string|nil) "start_violation" if next_char may not start a line,
 --   "end_violation" if last_char may not end a line, nil if the wrap is fine.
---   The squeeze-in vs push-out decision (and its cost model) belongs to the
---   backend.
+--   How to resolve the violation is decided by resolve_overflow() below; the
+--   backend only assembles the two candidate gap sets.
 function M.check_wrap(last_char, next_char, opts)
     local level = (opts and opts.level) or DEFAULT_LEVEL
     if next_char and punct_table.forbid_line_start(next_char, level) then
@@ -201,6 +203,85 @@ function M.check_wrap(last_char, next_char, opts)
         return "end_violation"
     end
     return nil
+end
+
+-- ============================================================================
+-- Squeeze-in vs push-out decision (禁则的解决方式)
+-- ============================================================================
+
+-- 形变代价的权重：clreq 挤压/拉伸优先顺序里越靠前的类越「便宜」，动它付出的
+-- 代价越小；没有归类的 gap（兜底均分的字距）最贵。权重直接取顺序序号。
+local SHRINK_WEIGHT = {}
+for i, class in ipairs(adjust.SHRINK_ORDER) do SHRINK_WEIGHT[class] = i end
+local STRETCH_WEIGHT = {}
+for i, class in ipairs(adjust.STRETCH_ORDER) do STRETCH_WEIGHT[class] = i end
+local FALLBACK_WEIGHT = #adjust.SHRINK_ORDER + 1
+
+local COST_EPS = 1e-9
+
+-- 一个候选排布的代价：解出来之后，各 gap 相对自然值的形变量按类加权平均。
+-- 只有真正可动的 gap（min < width 或 max > width）参与——刚性 gap 不是调整
+-- 手段，不该稀释平均值。全刚性（无可动 gap）时代价为 0：没有可比的形变。
+local function candidate_cost(target, gaps)
+    local r = adjust.solve(target, gaps)
+    if r.deficit > COST_EPS then
+        -- 全部触底仍装不下：这个候选不可行
+        return math.huge, r
+    end
+    local wsum, dsum = 0, 0
+    for i, g in ipairs(gaps) do
+        local w = g.width
+        local min = g.min or w
+        local max = g.max or w
+        if max - min > COST_EPS then
+            local delta = r.widths[i] - w
+            local weight
+            if delta < 0 then
+                weight = SHRINK_WEIGHT[g.shrink_class] or FALLBACK_WEIGHT
+            else
+                weight = STRETCH_WEIGHT[g.stretch_class] or FALLBACK_WEIGHT
+            end
+            wsum = wsum + weight
+            dsum = dsum + weight * math.abs(delta)
+        end
+    end
+    if wsum <= 0 then return 0, r end
+    return dsum / wsum, r
+end
+
+--- Resolve a line/column overflow caused by a kinsoku violation: is it cheaper
+-- to squeeze the offending character into the current line ("挤进") or to push
+-- it out to the next one ("推出")?
+--
+-- Both candidates are solved with adjust.solve, so the comparison sees the real
+-- clreq priority order: recovering a comma's blank costs far less than opening
+-- up the inter-character spacing. A backend that compares raw gap sizes cannot
+-- know this and will push out lines the solver could have absorbed.
+--
+-- clreq 的口径是「先挤进，后推出」，因此代价相等时选挤进。
+--
+-- @param cands (table) {
+--   squeeze = { target = number, gaps = {...} },  -- 多收一个字的排布
+--   stretch = { target = number, gaps = {...} },  -- 少一个字的排布
+-- }  两者的 target 均为「gap 可用总量」= 列可用长度 − 该候选的刚性总量。
+-- @return (string) "squeeze" | "stretch"
+-- @return (table) { squeeze_cost, stretch_cost, squeeze, stretch }
+--   （squeeze / stretch 为对应的 adjust.solve 结果，供后端直接落盘或调试）
+function M.resolve_overflow(cands)
+    local sq_cost, sq_res = math.huge, nil
+    local st_cost, st_res = math.huge, nil
+    if cands.squeeze then
+        sq_cost, sq_res = candidate_cost(cands.squeeze.target, cands.squeeze.gaps)
+    end
+    if cands.stretch then
+        st_cost, st_res = candidate_cost(cands.stretch.target, cands.stretch.gaps)
+    end
+    local detail = {
+        squeeze_cost = sq_cost, stretch_cost = st_cost,
+        squeeze = sq_res, stretch = st_res,
+    }
+    if sq_cost <= st_cost then return "squeeze", detail end
+    return "stretch", detail
 end
 
 --- For a run of `run_len` identical two-em members (dash/ellipsis), whether

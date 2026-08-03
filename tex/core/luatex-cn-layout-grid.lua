@@ -76,6 +76,10 @@ local style_registry = package.loaded['util.luatex-cn-style-registry'] or
 
 local dbg = debug.get_debugger('layout')
 
+-- clreq 共享内核：行内调整求解器与禁则决策（规则只在共享层，后端只组装与落盘）
+local adjust = require('shared.luatex-cn-adjust')
+local kinsoku = require('shared.luatex-cn-kinsoku')
+
 -- Load helpers (parameter getters, style attributes, column validation, occupancy)
 local h = package.loaded['core.luatex-cn-layout-grid-helpers'] or
     require('core.luatex-cn-layout-grid-helpers')
@@ -1518,7 +1522,7 @@ local function handle_spacing_node(t, ctx, grid_height, effective_col_height_sp,
                     ctx.cur_y_sp = ctx.cur_y_sp + cell_h
                     ctx.cur_row = math.floor(ctx.cur_y_sp / grid_height + 0.5)
                     if not in_table and ctx.cur_y_sp >= effective_col_height_sp then
-                        flush_fn()
+                        flush_fn("wrap")
                         wrap_to_next_column(ctx, p_cols, interval, grid_height, indent, false, false)
                     else
                         move_to_next_valid_position(ctx, interval, grid_height, indent)
@@ -1530,7 +1534,7 @@ local function handle_spacing_node(t, ctx, grid_height, effective_col_height_sp,
             ctx.cur_y_sp = ctx.cur_y_sp + net_width
             ctx.cur_row = math.floor(ctx.cur_y_sp / grid_height + 0.5)
             if not in_table and ctx.cur_y_sp > effective_col_height_sp then
-                flush_fn()
+                flush_fn("wrap")
                 wrap_to_next_column(ctx, p_cols, interval, grid_height, indent, false, false)
             end
         end
@@ -1573,8 +1577,180 @@ local function is_line_end_forbidden_code(code)
     return code == 1
 end
 
+-- ============================================================================
+-- clreq 行内调整：把一列拆成「刚性字幅 + 可调 gap」
+-- 设计见 docs/CLREQ-VERTICAL-ADJUST-DESIGN.md §2
+-- ============================================================================
+
+--- 字幅基准（sp）：与 get_cell_height 同一口径——样式字号 → 字体字号 →
+-- 正文网格。标点的收回量都是相对它的比例，取错基准会让字面居中错位
+-- （用已扣掉收回量的 cell_height 当基准就是这个错误）。
+local function node_em(nd, grid_height)
+    local fs = get_node_font_size(nd)
+    if fs and fs > 0 then return fs end
+    local fid = D.getfield(nd, "font")
+    if fid then
+        local f = font.getfont(fid)
+        if f and f.size then return f.size end
+    end
+    return grid_height
+end
+
+--- 读「1 + 千分比」型属性，未设置时为 0
+local function attr_permille(nd, attr)
+    local v = D.get_attribute(nd, attr)
+    if not v or v <= 1 then return 0 end
+    return (v - 1) / 1000
+end
+
+--- 第 i 与第 i+1 个条目之间的字距 gap。
+-- 标号组内部、标号两侧、块（墨围等）两侧都是固定间距，不参与调整；
+-- 只有正文字距可调，且它在 clreq 挤压顺序里排在所有标点空白之后
+-- （"inter_char"，见 shared/adjust.lua 的注释），拉伸时作为兜底均分对象。
+-- @param locked (boolean) 该边界属于刚性单元内部
+local function inter_gap_desc(entries, i, grid_height, locked)
+    local e = entries[i]
+    local nxt = entries[i + 1]
+    local ch = e.cell_height or grid_height
+    local cur_marker = D.get_attribute(e.node, constants.ATTR_FOOTNOTE_MARKER)
+    local nxt_marker = D.get_attribute(nxt.node, constants.ATTR_FOOTNOTE_MARKER)
+    local cur_in_group = cur_marker and cur_marker > 0
+    local nxt_in_group = nxt_marker and nxt_marker > 0
+
+    local w
+    if cur_in_group and nxt_in_group then
+        w = 0                                   -- 标号组内部：无间隙
+    elseif cur_in_group then
+        -- 标号 → 后文：后松。但后面若紧跟标点，标号与该标点同属依附前文的
+        -- 收尾单元，仍按普通字距。
+        local nxt_punct = D.get_attribute(nxt.node, constants.ATTR_PUNCT_TYPE)
+        local base = get_node_font_size(e.node) or grid_height
+        if nxt_punct and nxt_punct > 0 then
+            w = math.floor(base * GAP_RATIO)
+        else
+            w = marker_gap_sp(base, "after")
+        end
+    elseif nxt_in_group then
+        w = marker_gap_sp(get_node_font_size(nxt.node) or grid_height, "before")
+    elseif e.is_block then
+        w = math.floor(ch * GAP_RATIO)
+    else
+        local base = math.floor(ch * GAP_RATIO)
+        if locked then
+            return { width = base, min = base, max = base }
+        end
+        return { width = base, min = 0, max = base,
+                 shrink_class = "inter_char", fallback = true }
+    end
+    return { width = w, min = w, max = w }
+end
+
+--- 把一列拆成求解器要的 gap 序列。
+--
+-- 模型（设计 §2.1）：标点字幅里的空白升格为 gap，cell 只留刚性墨迹部分。
+-- 空白分两截——相邻标点规则**强制**收回的那截已经由 punct.flatten 扣进
+-- cell_height（clreq 的连续标点缩减是硬性规定，不是弹性），剩下的那截才是
+-- 弹性余量，列排不下时按 clreq 挤压优先顺序先收它、再动字距。
+--
+-- gap 顺序（N 个字）：
+--   head_1, [tail_1, inter_1, head_2], …, [tail_{N-1}, inter_{N-1}, head_N], tail_N
+-- 不合并同一边界上的三个 gap：它们的挤压类别不同（标点空白在 clreq 顺序的
+-- 前列，字距是最后手段），合并会丢掉优先级。
+--
+-- @param entries (table) 列内条目（需已定好 cell_height）
+-- @param grid_height (number) 正文网格字幅（sp），用作缺省字号
+-- @return (table) {
+--   gaps, rigid[i], rigid_total,
+--   head_idx[i], tail_idx[i], inter_idx[i],
+--   blank_head_sp[i], blank_total_sp[i]  -- 潜在空白（供还原字面位置）
+-- }
+local function build_column_gaps(entries, grid_height)
+    local N = #entries
+    local el_head, el_tail, rigid = {}, {}, {}
+    local cls, rigid_prev = {}, {}
+    local blank_head_sp, blank_total_sp = {}, {}
+    local rigid_total = 0
+
+    for i = 1, N do
+        local e = entries[i]
+        local nd = e.node
+        local ch = e.cell_height or grid_height
+        local em = node_em(nd, grid_height)
+        local b_total = attr_permille(nd, constants.ATTR_PUNCT_BLANK)
+        local b_head = attr_permille(nd, constants.ATTR_PUNCT_BLANK_HEAD)
+        local m_total = attr_permille(nd, constants.ATTR_PUNCT_SQUEEZE)
+        local m_head = attr_permille(nd, constants.ATTR_PUNCT_SQUEEZE_HEAD)
+        local eh = math.max(0, b_head - m_head) * em
+        local et = math.max(0, (b_total - b_head) - (m_total - m_head)) * em
+        if eh + et > ch then
+            -- 字幅被样式覆盖（style grid_height）等异常情形：不升格空白
+            eh, et = 0, 0
+        end
+        -- 刚性墨迹尺寸必须在扣除硬性收回**之前**定下：收回的是空白，
+        -- 不是墨迹，扣多少都不该让刚性部分变大（否则字面会被整体推走）
+        rigid[i] = ch - eh - et
+        rigid_total = rigid_total + rigid[i]
+        -- 列首的开始夹注符号、列末的点号：clreq 规定的收回是硬性的，不是
+        -- 弹性余量，落在这两个位置就直接从空白里扣掉（设计 §2.3）
+        if i == 1 then
+            eh = math.max(0, eh
+                - attr_permille(nd, constants.ATTR_PUNCT_TRIM_START) * em)
+        end
+        if i == N then
+            et = math.max(0, et
+                - attr_permille(nd, constants.ATTR_PUNCT_TRIM_END) * em)
+        end
+        el_head[i], el_tail[i] = eh, et
+        blank_head_sp[i] = b_head * em
+        blank_total_sp[i] = b_total * em
+
+        local ci = D.get_attribute(nd, constants.ATTR_PUNCT_SHRINK_CLASS)
+        cls[i] = (ci and ci > 1) and adjust.SHRINK_ORDER[ci - 1] or nil
+        rigid_prev[i] = D.get_attribute(nd, constants.ATTR_RIGID_PREV) == 1
+    end
+
+    local gaps = {}
+    local head_idx, tail_idx, inter_idx = {}, {}, {}
+    local function push(g)
+        gaps[#gaps + 1] = g
+        return #gaps
+    end
+    -- 刚性单元内部：宽度锁死（横排的教训——只清 stretch 不清 shrink，
+    -- 两字幅单元会被压扁）
+    local function blank_gap(w, class, locked)
+        return { width = w, min = locked and w or 0, max = w,
+                 shrink_class = (not locked) and class or nil }
+    end
+
+    for i = 1, N do
+        if i > 1 then
+            local locked = rigid_prev[i]
+            tail_idx[i - 1] = push(blank_gap(el_tail[i - 1], cls[i - 1], locked))
+            inter_idx[i - 1] = push(inter_gap_desc(entries, i - 1, grid_height,
+                locked))
+        end
+        head_idx[i] = push(blank_gap(el_head[i], cls[i],
+            i > 1 and rigid_prev[i] or false))
+    end
+    -- 列末标点余下的空白是 clreq 挤压顺序的第 1 级（位于行末的标点），
+    -- 优先于其余所有类别
+    tail_idx[N] = push(blank_gap(el_tail[N],
+        cls[N] and "line_end_punct" or nil, false))
+
+    return {
+        gaps = gaps, rigid = rigid, rigid_total = rigid_total,
+        head_idx = head_idx, tail_idx = tail_idx, inter_idx = inter_idx,
+        blank_head_sp = blank_head_sp, blank_total_sp = blank_total_sp,
+    }
+end
+
 --- Calculate whether to squeeze or stretch for kinsoku resolution.
--- Compares per-gap cost of each option and returns the cheaper one.
+--
+-- 只负责组装两个候选排布（挤进 = 多收一个字，推出 = 少一个字），代价比较
+-- 交给共享层 kinsoku.resolve_overflow——它对两个候选各解一次 adjust.solve，
+-- 因此看得见 clreq 的挤压优先顺序：收一个逗号的字面空白远比拉开字距便宜。
+-- 后端自己按 gap 大小比价是看不到这一层的，会把求解器本来吃得下的列推出去。
+--
 -- @param col_buffer (table) Current column buffer (N chars)
 -- @param t_node (direct node) The character about to be placed
 -- @param ctx (table) Grid context
@@ -1586,40 +1762,31 @@ local function calculate_kinsoku_action(col_buffer, t_node, ctx, grid_height)
 
     local col_start_y = col_buffer[1].y_sp or 0
     local available = ctx.col_height_sp - col_start_y
-    local base_gap = math.floor(grid_height * GAP_RATIO)
 
-    local total_cells = 0
-    for _, e in ipairs(col_buffer) do
-        total_cells = total_cells + (e.cell_height or grid_height)
-    end
+    local squeeze_entries = {}
+    for i = 1, N do squeeze_entries[i] = col_buffer[i] end
+    squeeze_entries[N + 1] = {
+        node = t_node,
+        cell_height = resolve_cell_height(t_node, grid_height, nil,
+            ctx.punct_config),
+    }
+    local sq = build_column_gaps(squeeze_entries, grid_height)
 
-    -- Squeeze: fit N+1 chars in column (N gaps)
-    local t_cell_h = resolve_cell_height(t_node, grid_height, nil, ctx.punct_config)
-    local total_squeeze = total_cells + t_cell_h
-    local n_gaps_squeeze = N
-    local squeeze_cost = math.huge
-    if total_squeeze < available and n_gaps_squeeze > 0 then
-        local new_gap = (available - total_squeeze) / n_gaps_squeeze
-        squeeze_cost = math.abs(new_gap - base_gap)
-    end
+    local stretch_entries = {}
+    for i = 1, N - 1 do stretch_entries[i] = col_buffer[i] end
+    local st = build_column_gaps(stretch_entries, grid_height)
 
-    -- Stretch: keep N-1 chars in column (N-2 gaps)
-    local last_cell_h = col_buffer[N].cell_height or grid_height
-    local total_stretch = total_cells - last_cell_h
-    local n_gaps_stretch = N - 2
-    local stretch_cost = math.huge
-    if n_gaps_stretch > 0 then
-        local new_gap = (available - total_stretch) / n_gaps_stretch
-        stretch_cost = math.abs(new_gap - base_gap)
-    elseif N == 2 then
-        stretch_cost = 0
-    end
+    local action, detail = kinsoku.resolve_overflow({
+        squeeze = { target = available - sq.rigid_total, gaps = sq.gaps },
+        stretch = { target = available - st.rigid_total, gaps = st.gaps },
+    })
 
     dbg.log(string.format(
-        "kinsoku cost: squeeze=%.2f stretch=%.2f (base_gap=%d, N=%d) [p:%d c:%d]",
-        squeeze_cost, stretch_cost, base_gap, N, ctx.cur_page, ctx.cur_col))
+        "kinsoku cost: squeeze=%.2f stretch=%.2f (N=%d) → %s [p:%d c:%d]",
+        detail.squeeze_cost, detail.stretch_cost, N, action,
+        ctx.cur_page, ctx.cur_col))
 
-    return squeeze_cost <= stretch_cost and "squeeze" or "stretch"
+    return action
 end
 
 --- Check if a kinsoku violation would occur at column wrap point.
@@ -1651,6 +1818,7 @@ end
 
 _internal.is_line_start_forbidden_code = is_line_start_forbidden_code
 _internal.is_line_end_forbidden_code = is_line_end_forbidden_code
+_internal.build_column_gaps = build_column_gaps
 _internal.calculate_kinsoku_action = calculate_kinsoku_action
 _internal.check_natural_kinsoku = check_natural_kinsoku
 
@@ -1753,7 +1921,7 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
                     D.getfield(t, "char") or 0, ctx.cur_page, ctx.cur_col))
             elseif kinsoku_action == "stretch" then
                 local pulled = table.remove(col_buffer)
-                flush_fn()
+                flush_fn("wrap")
                 accumulate_free_mode_col_width(ctx, params)
                 wrap_to_next_column(ctx, p_cols, interval, grid_height, base_indent or indent, false, false)
                 apply_indentation(ctx, base_indent or indent)
@@ -1779,7 +1947,7 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
         end
 
         if should_wrap then
-            flush_fn()
+            flush_fn("wrap")
             accumulate_free_mode_col_width(ctx, params)
             wrap_to_next_column(ctx, p_cols, interval, grid_height, base_indent or indent, false, false)
             apply_indentation(ctx, base_indent or indent)
@@ -1859,7 +2027,10 @@ end
 -- @param grid_height (number) Grid height in sp
 -- @param distribute (boolean) Whether to distribute nodes evenly
 -- @param layout_map (table) Output layout map (node → position)
-local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map)
+-- @param reason (string|nil) 这次落盘的成因："wrap" = 写满换列（该列均排到
+--   列底），其余（段落结束、强制换列/换页、缓冲收尾）一律按自然长度排——
+--   clreq：正文末行不均排。缺省视作 "end"。
+local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map, reason)
     if #col_buffer == 0 then return end
 
     local N = #col_buffer
@@ -1985,124 +2156,52 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
             end
         end
 
-        -- Classify each gap: stretchable, fixed, or none
-        -- gap_fixed[i] = fixed gap size in sp (0 for markers, 0.1em for blocks)
-        -- is_stretchable[i] = true only for text-text gaps
-        local is_stretchable = {}
-        local gap_fixed = {}
-        local total_cells = 0
-        local total_fixed_gaps = 0
-        local total_base_gaps = 0
-        local n_stretchable = 0
-        for i, e in ipairs(col_buffer) do
-            local ch = e.cell_height or grid_height
-            total_cells = total_cells + ch
-            if i < N then
-                local cur_is_marker = D.get_attribute(e.node, constants.ATTR_FOOTNOTE_MARKER)
-                local nxt = col_buffer[i + 1]
-                local nxt_is_marker = D.get_attribute(nxt.node, constants.ATTR_FOOTNOTE_MARKER)
-                local cur_is_block = e.is_block
-                if (cur_is_marker and cur_is_marker > 0)
-                    and (nxt_is_marker and nxt_is_marker > 0) then
-                    -- Inside marker group: no gap
-                    is_stretchable[i] = false
-                    gap_fixed[i] = 0
-                elseif (cur_is_marker and cur_is_marker > 0)
-                    and not (nxt_is_marker and nxt_is_marker > 0) then
-                    -- Marker end → next element: 后松（与后文分开）。
-                    -- 但后面若紧跟标点（「…黃︻一︼，」），标号与该标点同属
-                    -- 依附前文的收尾单元，中间不拉开，仍按普通字距。
-                    local nxt_punct = D.get_attribute(nxt.node, constants.ATTR_PUNCT_TYPE)
-                    local base = get_node_font_size(e.node) or grid_height
-                    local fg
-                    if nxt_punct and nxt_punct > 0 then
-                        fg = math.floor(base * GAP_RATIO)
-                    else
-                        fg = marker_gap_sp(base, "after")
-                    end
-                    is_stretchable[i] = false
-                    gap_fixed[i] = fg
-                    total_fixed_gaps = total_fixed_gaps + fg
-                elseif (nxt_is_marker and nxt_is_marker > 0) then
-                    -- Before marker group start: 前紧（贴住被标注的内容）
-                    local base = get_node_font_size(nxt.node) or grid_height
-                    local fg = marker_gap_sp(base, "before")
-                    is_stretchable[i] = false
-                    gap_fixed[i] = fg
-                    total_fixed_gaps = total_fixed_gaps + fg
-                elseif cur_is_block then
-                    -- Block (墨围 etc.): fixed 0.1em gap, not stretchable
-                    local fg = math.floor(ch * GAP_RATIO)
-                    is_stretchable[i] = false
-                    gap_fixed[i] = fg
-                    total_fixed_gaps = total_fixed_gaps + fg
-                else
-                    -- Regular text: stretchable 0.1em gap
-                    local bg = math.floor(ch * GAP_RATIO)
-                    is_stretchable[i] = true
-                    gap_fixed[i] = bg
-                    n_stretchable = n_stretchable + 1
-                    total_base_gaps = total_base_gaps + bg
-                end
+        -- clreq 行内调整：组装 gap 序列后交给共享层求解（设计 §2–§4）。
+        -- 旧的三分支经验策略（平均压缩 / 平均拉伸 / 一律 0.1em）没有优先级，
+        -- 把逗号空白、夹注符号空白、中西间距、字距一视同仁；求解器按 clreq
+        -- 的七级挤压 / 二级拉伸 + 兜底均分处理。
+        local col = build_column_gaps(col_buffer, grid_height)
+        local available = ctx.col_height_sp - col_start_y
+        local target = available - col.rigid_total
+        local natural = 0
+        for _, g in ipairs(col.gaps) do natural = natural + g.width end
+
+        -- 均排的两个条件缺一不可：
+        --   ① 这一列是写满后换列的——段末列、强制换列/换页收尾的列不均排
+        --      （clreq：正文末行不均排）；
+        --   ② 剩余量不足一个字幅——列尾被夹注、标号组这类整块元素挡住而空出
+        --      一大截时硬拉到列底会把字距拉散，宁可参差。
+        -- 超长的列不论成因都要压缩，否则溢出版口。
+        local justify = (reason == "wrap")
+            and (target - natural) < grid_height + math.floor(grid_height * GAP_RATIO)
+        local widths
+        if N > 1 and (natural > target or justify) then
+            local r = adjust.solve(target, col.gaps)
+            widths = r.widths
+            if r.deficit > 0 then
+                dbg.log(string.format(
+                    "column adjust: 全部触底仍超长 %d sp (N=%d) [p:%d c:%d]",
+                    math.floor(r.deficit), N, ctx.cur_page, ctx.cur_col))
             end
         end
-        local occupied = total_cells + total_base_gaps + total_fixed_gaps + col_start_y
-        local remaining = ctx.col_height_sp - occupied
+        local function gw(idx)
+            return widths and widths[idx] or col.gaps[idx].width
+        end
 
-        if N == 1 then
-            -- Keep original y_sp (preserves indent offset)
-        elseif remaining < 0 and N > 1 and n_stretchable > 0 then
-            -- Overfull (kinsoku squeeze): compress stretchable gaps to fit
-            local total_available = ctx.col_height_sp - total_cells - col_start_y - total_fixed_gaps
-            if total_available > 0 then
-                local squeeze_gap = total_available / n_stretchable
-                local y = col_start_y
-                for i, e in ipairs(col_buffer) do
-                    e.y_sp = y
-                    local ch = e.cell_height or grid_height
-                    if i < N then
-                        y = y + ch + (is_stretchable[i] and squeeze_gap or gap_fixed[i])
-                    else
-                        y = y + ch
-                    end
-                end
-            else
-                -- Even with zero gaps, chars don't fit. Stack tight.
-                local y = col_start_y
-                for i, e in ipairs(col_buffer) do
-                    e.y_sp = y
-                    local ch = e.cell_height or grid_height
-                    if i < N then
-                        y = y + ch + (is_stretchable[i] and 0 or (gap_fixed[i] or 0))
-                    end
-                end
+        local y = col_start_y
+        for i, e in ipairs(col_buffer) do
+            local hw = gw(col.head_idx[i])
+            local tw = gw(col.tail_idx[i])
+            e.y_sp = y
+            e.cell_height = hw + col.rigid[i] + tw
+            -- 字面还原量随 entry 下发：收回量现在由求解器决定，不再是每字一个
+            -- 常量，render 只读不算（设计 §4）
+            if col.blank_total_sp[i] > 0 then
+                e.punct_squeeze_sp = col.blank_total_sp[i] - hw - tw
+                e.punct_head_sp = col.blank_head_sp[i] - hw
             end
-        elseif remaining >= 0 and remaining < grid_height + math.floor(grid_height * GAP_RATIO) and N > 1 and n_stretchable > 0 then
-            -- Nearly full: stretch only stretchable gaps; fixed gaps keep their size
-            local total_available = ctx.col_height_sp - total_cells - col_start_y - total_fixed_gaps
-            local stretch_gap = total_available / n_stretchable
-            local y = col_start_y
-            for i, e in ipairs(col_buffer) do
-                e.y_sp = y
-                local ch = e.cell_height or grid_height
-                if i < N then
-                    y = y + ch + (is_stretchable[i] and stretch_gap or gap_fixed[i])
-                else
-                    y = y + ch
-                end
-            end
-        else
-            -- Not full: use 0.1em for stretchable and block gaps; 0 for markers
-            local y = col_start_y
-            for i, e in ipairs(col_buffer) do
-                local ch = e.cell_height or grid_height
-                e.y_sp = y
-                if i < N then
-                    y = y + ch + gap_fixed[i]
-                else
-                    y = y + ch
-                end
-            end
+            y = y + e.cell_height
+            if i < N then y = y + gw(col.inter_idx[i]) end
         end
     end
 
@@ -2189,6 +2288,10 @@ local function flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map
             v_scale = v_scale,
             cell_height = entry.cell_height,
             cell_width = entry.cell_width,
+            -- 标点字面还原量（sp）：自然模式下由行内调整求解器决定，
+            -- render 按它把字面放回原位（设计 §4）
+            punct_squeeze_sp = entry.punct_squeeze_sp,
+            punct_head_sp = entry.punct_head_sp,
             -- P2: absolute coordinates
             x = h.compute_x(entry.col, entry.page, ctx),
             y = h.compute_y(y_sp, fl_band_y_off, ctx),
@@ -2295,8 +2398,9 @@ local function calculate_grid_positions(head, grid_height, line_limit, n_column,
     -- Block tracking for First Indent
     local block_start_cols = {} -- map[block_id] -> {page=p, col=c}
 
-    local function do_flush()
-        flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map)
+    -- reason 见 flush_buffer：只有写满换列的列才均排到列底，其余按自然长度
+    local function do_flush(reason)
+        flush_buffer(col_buffer, ctx, grid_height, distribute, layout_map, reason)
     end
 
     local t = d_head
@@ -2421,7 +2525,7 @@ local function calculate_grid_positions(head, grid_height, line_limit, n_column,
         end
 
         if should_wrap_before_node then
-            do_flush()
+            do_flush("wrap")
             accumulate_free_mode_col_width(ctx, params)
             wrap_to_next_column(ctx, p_cols, interval, grid_height, base_indent, true, false)
             -- After column wrap, fully re-resolve indent: the column change may

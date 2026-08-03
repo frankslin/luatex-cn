@@ -24,10 +24,16 @@ end
 test_utils.run_test("SHRINK_ORDER is the clreq 7-step sequence", function()
     local expect = { "line_end_punct", "western_word", "interpunct",
         "bracket", "comma_group", "cjk_western", "fullstop_group" }
-    test_utils.assert_eq(#adjust.SHRINK_ORDER, 7)
     for i, name in ipairs(expect) do
         test_utils.assert_eq(adjust.SHRINK_ORDER[i], name)
     end
+end)
+
+test_utils.run_test("inter_char 排在 clreq 七步之后（最后手段）", function()
+    -- 直排 0.1em 基准字距是本项目的版式选择，不在 clreq 的七步之内；
+    -- 它必须排在所有标点空白之后，绝不能先于标点空白被压缩。
+    test_utils.assert_eq(#adjust.SHRINK_ORDER, 8)
+    test_utils.assert_eq(adjust.SHRINK_ORDER[8], "inter_char")
 end)
 
 test_utils.run_test("STRETCH_ORDER is the clreq 2-step sequence", function()
@@ -86,8 +92,8 @@ test_utils.run_test("shrink: all seven classes in one line", function()
     -- One gap per class, each with 0.1 headroom; need 0.65 total
     -- → first six classes fully drained (0.6), seventh gives 0.05
     local gaps = {}
-    for _, class in ipairs(adjust.SHRINK_ORDER) do
-        gaps[#gaps + 1] = shrinkable(0.5, 0.4, class)
+    for i = 1, 7 do
+        gaps[#gaps + 1] = shrinkable(0.5, 0.4, adjust.SHRINK_ORDER[i])
     end
     local r = solve(3.5 - 0.65, gaps)
     test_utils.assert_true(r.achieved)

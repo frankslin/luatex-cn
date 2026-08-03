@@ -5,9 +5,15 @@
 > 这是检验 H0 接口的地方：如果 `adjust.solve` 的入参在竖排凑不出来，
 > 说明接口有缺口，应改共享层而不是在后端打补丁（HR5）。
 
-> **状态（2026-08-02）：待评审，未动工。** 第 5 节的五步一步都没开始。
-> §6 的四项接口缺口中，两项动工前置已清：clreq 解析器的 cm 缩放洞
-> 已修（#137），叹问号叠加已入共享层（#139）。
+> **状态（2026-08-03）：已实现。** 第 5 节的第 1–4 步已落地（见各步的
+> 完成记录），第 5 步「grid 模式合流」经评估**不做**，理由见该步。
+> §6 的四项接口缺口全部结清。
+>
+> 落地后的验收：unit 41 全过、clreq 断言 97 全过（新增 2 条行首夹注符号
+> 条款）、regression 三套 43 全过，**`ltc-guji` 系列基线零变化**（R5）；
+> 变的只有 `ltc-cn-vbook` / `ltc-tw-vbook` 六个用例，差异来源逐列核对过，
+> 全部是本设计要的两项改变：①段末列不再均排；②挤压按 clreq 优先顺序
+> （先收标点空白，字距是最后手段）。
 
 前置状态（本设计文档写作时）：P1 第一步已完成——标点宽度调整改为上下文
 相关，规则在 `tex/shared/luatex-cn-punct-squeeze.lua`，收回量由
@@ -17,7 +23,11 @@
 
 ---
 
-## 1. 现状：flush_buffer 里那套临时策略
+## 1. 现状：flush_buffer 里那套临时策略（已被本设计替换）
+
+> 本节描述的是接线**之前**的实现，保留下来是为了说明这次改的是什么。
+> 当前代码里三分支已不存在，取而代之的是 `build_column_gaps` + `adjust.solve`。
+
 
 `tex/core/luatex-cn-layout-grid.lua`：
 
@@ -92,6 +102,12 @@ marker 组内部）：`shrink_class = nil`、`stretch_class = nil`、
 `fallback = false`、`min = max = width`。横排已用同一套 `RIGID_REASONS`
 （`hori-spacing.lua`），竖排照抄常量而不是重写规则。
 
+**实现**：layout 阶段拿不到逻辑码位（竖排字形已被替换成 PUA/vert 形），
+所以判定放在 `punct.flatten`——它手上有完整的逻辑码位序列，对每个边界调
+`kinsoku.no_break_between`，命中 RIGID_REASONS 就在**后一个字**上打
+`ATTR_RIGID_PREV`。`build_column_gaps` 见到这个标记就把该边界上的三个 gap
+（前字末端空白、字距、后字始端空白）一起锁死。
+
 ### 2.3 行首/行尾在这里落地
 
 `punct_squeeze.plan` 的 `ctx = { at_line_start, at_line_end }` 目前无人传——
@@ -132,6 +148,12 @@ target = ctx.col_height_sp − col_start_y
 （如 `flush_buffer(..., reason)`，`reason = "wrap" | "end"`），这是本次接线
 唯一需要改的调用协议。
 
+**实现**：`do_flush(reason)` 缺省为 `"end"`，只有四个真正「写满」的点传
+`"wrap"`——节点前换列（`should_wrap_before_node`，这是主路径）、字形放置时
+的换列（`should_wrap`）、禁则推出、以及空白累积溢出列高。强制换列/换页、
+表格单元、段落收尾一律 `"end"`。找漏这些点的症状很直白：整篇文档的字距
+从「拉伸到列底」退回基准 0.1em，每列短一小截。
+
 余量为负且全组触底时 `solve` 返回 `deficit > 0`：按 clreq「先挤进，后推出」，
 此时应把末字推到下一列并重解，而不是硬压——推出决策留在后端
 （`kinsoku.check_wrap` 已提供判定，代价比较仍是后端职责，契约 3.1）。
@@ -156,39 +178,74 @@ for i = 1..N:
 只传总收回量会让居中逻辑把句号向上飘半个收回量、紧贴前字，后侧反而留洞。
 现行做法是 render 读 `ATTR_PUNCT_SQUEEZE`（总量）与
 `ATTR_PUNCT_SQUEEZE_HEAD`（始端量），按**原始满幅**居中、再按始端量上移
-（`render-page-process.lua`）。接线后收回量改由 solver 决定、不再是每字一个
-常量，届时应把这两个量随 layout_map entry 下发（`head_sp` / `tail_sp`），
-render 仍只读不算。
+（`render-page-process.lua`）。
+
+**接线后**收回量由求解器决定、不再是每字一个常量，于是随 layout_map entry
+下发 `punct_squeeze_sp` / `punct_head_sp`（sp），`punct_ink_placement` 优先
+读它们、没有才回落到属性（grid 模式仍走属性）。render 仍只读不算。
+
+落盘时有个必须守住的次序：**刚性尺寸要在扣除硬性收回之前定下**。
+`rigid = cell − 弹性始端 − 弹性末端` 算完之后才能把行首/行尾的硬性收回从
+空白里扣掉；反过来先扣、再拿 `cell − 空白` 求刚性，刚性就会凭空变大，
+整个字面被往后推半字（实测：列末句号的字面下移 0.25 em）。收回的是空白，
+不是墨迹——墨迹尺寸永远等于 `em × (1 − 潜在空白)`。
+
+同理，所有比例（潜在空白、已收回量）的基准 em 必须取**字号**
+（样式字号 → 字体字号 → 正文网格，与 `get_cell_height` 同一口径），
+不能图省事用已经扣过收回量的 `cell_height`：拿半字幅的句号当基准会让
+`ink_h` 算成 0.75 em，字面在格中居中时偏移 1/8 em。
 
 ---
 
 ## 5. 迁移步骤（每步独立可测）
 
-1. **只读接线**：在 flush_buffer 里按 §2 组装 gaps 并调用 `solve`，但结果
-   只写进 debug 日志与 layout JSON，不改 y_sp。用现有 vbook 用例对比
-   solver 结果与现行三分支策略的差异，确认差异只出现在有标点的列。
-2. **换掉「超长」分支**：`remaining < 0` 时改用 solve 的挤压结果
-   （SHRINK_ORDER）。此分支现在就是平均压缩，最容易看出优先级效果。
-3. **换掉「近满」分支**：拉伸走 STRETCH_ORDER + 兜底均分。
-4. **行首/行尾接入**（§2.3），同时把 P1 留的缺口补上。
-5. **grid 模式合流**：cells 全为 `default_cell_height`、gaps 全 0，
-   走同一条代码路径（消灭 R2 双轨）。
+1. ~~**只读接线**~~ → **已并入第 2/3 步**：组装与落盘同时上线，差异用
+   「同一份 .tex 在新旧代码下逐字对比 PDF 坐标」核对（脚本比只读日志更
+   直接：`clreq_test.parse_pdf_vertical` 解析出的每字基线可直接 diff）。
+2. ~~**换掉「超长」分支**~~ → **已完成**：`remaining < 0` 时走 `solve`，
+   按 SHRINK_ORDER 逐级消化。效果可见：史记用例里原本被平均压缩的列，
+   现在字距保持 0.1em 不动，超长量全由三个逗号的字面空白吸收。
+3. ~~**换掉「近满」分支**~~ → **已完成**：拉伸走 STRETCH_ORDER + 兜底均分，
+   并按 §3 只对 `reason = "wrap"` 的列均排。均排另加一条护栏：剩余量
+   ≥ 一个字幅时不均排——列尾被夹注/标号组这类整块元素挡住而空出一大截时，
+   硬拉到列底会把字距拉散。
+4. ~~**行首/行尾接入**~~ → **已完成**：clreq 的行首开始夹注符号、行末点号
+   收回是**硬性**的（不是弹性余量），但「在不在列首列末」要等断列结果，
+   故由 `punct.flatten` 预先把两种情形的增量算好写在
+   `ATTR_PUNCT_TRIM_START` / `ATTR_PUNCT_TRIM_END`，flush_buffer 定下断列
+   后按位置取用（§2.3）。列末标点余下的空白归入挤压第 1 级
+   `line_end_punct`。
+5. **grid 模式合流** → **评估后不做**。grid 模式的 y 坐标是**遍历时**逐字
+   落定的，中途会被 `move_to_next_valid_position` 打断——版心列、被 textbox
+   占用的格子都会让同一列内的 y 出现跳变。合流意味着 flush_buffer 要重新
+   复现这些跳变，而收益为零：grid 模式下 cells 固定、gaps 全 0，走求解器
+   得到的坐标与现在逐字落定的完全相同。风险全在 `ltc-guji`（项目主用途）
+   的主路径上，收益只有「少一条代码路径」。R2 双轨保留，理由记在此处。
 
 每步的验收都是同一组：`texlua test/run_all.lua` → `python3
-test/clreq_test.py`（竖排断言用例 `test/clreq_test/vert-punct.tex`，
-逐步补行首/行尾条款）→ `python3 test/regression_test.py check --all`，
-且 `ltc-guji` 三套基线零变化（R5）。
+test/clreq_test.py`（竖排断言用例 `test/clreq_test/vert-punct.tex`）→
+`python3 test/regression_test.py check --all`，且 `ltc-guji` 三套基线
+零变化（R5）。
 
 ---
 
 ## 6. 已知的接口缺口（做之前先在共享层补）
 
-- `adjust.solve` 的 `deficit > 0` 只报告不决策，推出逻辑要在后端写一遍——
-  横排目前也各写一份，可考虑在 `kinsoku` 侧补一个统一的「挤进/推出」代价
-  比较函数。
-- `punct_squeeze.plan` 目前一次只判一个字符，行首/行尾要后端自己传 ctx；
-  若第 4 步发现调用点繁琐，可在共享层加一个 `plan_run(chars, opts)`
-  对整列一次算完（纯函数，仍不碰 TeX）。
+- ~~`adjust.solve` 的 `deficit > 0` 只报告不决策~~ → **已补**：
+  `kinsoku.resolve_overflow(cands)`。原文说「横排也各写一份」不准确——
+  横排根本没写，它把推出/挤进交给 TeX 断行器（`hori-spacing.boundary()`
+  只发 penalty + glue）；写了土办法的是竖排 `calculate_kinsoku_action`：
+  只比 `|新字距 − 基准字距|`，**看不见标点空白**，会把求解器本来吃得下的
+  列推出去。现在它对两个候选各解一次 `adjust.solve`，代价按 clreq 优先
+  顺序的序号加权（越靠前的类越便宜，未归类的字距最贵），代价相等时选
+  挤进（clreq：先挤进，后推出）。后端只剩组装 gap 与落盘。
+- ~~`punct_squeeze.plan` 一次只判一个字符，可能需要 `plan_run`~~ →
+  **不需要，改成一条契约**：调用点（`annotate_context_squeeze`）本来就是
+  逐字循环，`plan_run` 只是把循环搬进共享层，不消除任何重复逻辑，还会把
+  脚注标号组透明化这类竖排专有处理带进去。真正缺的是**顺序契约**：
+  flatten 阶段写下的 `ATTR_PUNCT_SQUEEZE` 是「不含行首行尾上下文」的初值，
+  列首/列末的额外收回由 flatten 预先算成 `ATTR_PUNCT_TRIM_START/END`，
+  flush_buffer 断列后按位置取用——两处属性读取，谈不上繁琐。
 - ~~**验收工具本身有个洞**~~ → **已修（#137）**：`test/clreq_test.py`
   解析器现跟踪 q/Q 栈与 cm 级联，缩放字形（脚注标号组）坐标与有效字号
   读取正确，并有专门断言守护。第 1 步「只读接线」的对比可放心用它。

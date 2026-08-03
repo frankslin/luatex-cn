@@ -70,10 +70,18 @@ local glyph_params = {}
 -- @param squeeze_attr (number|nil) ATTR_PUNCT_SQUEEZE：1 + 总收回量千分比
 -- @param head_attr (number|nil) ATTR_PUNCT_SQUEEZE_HEAD：1 + 始端收回量千分比
 -- @param em (number|nil) 该字形的字号（sp）
+-- @param pos (table|nil) layout_map 条目；自然模式下带 punct_squeeze_sp /
+--   punct_head_sp（sp），是行内调整求解器算出的实际收回量，优先于属性——
+--   属性只记 flatten 阶段按相邻上下文预判的那一份（设计 §4）
 -- @return (number|nil, number) 定位用字幅（原始满幅）、定位用起点
-local function punct_ink_placement(cell_height, y_sp, squeeze_attr, head_attr, em)
+local function punct_ink_placement(cell_height, y_sp, squeeze_attr, head_attr, em, pos)
+    if type(cell_height) ~= "number" then return cell_height, y_sp end
+    if pos and pos.punct_squeeze_sp then
+        return cell_height + pos.punct_squeeze_sp,
+               y_sp - (pos.punct_head_sp or 0)
+    end
     if not (squeeze_attr and squeeze_attr > 1) then return cell_height, y_sp end
-    if type(cell_height) ~= "number" or not em then return cell_height, y_sp end
+    if not em then return cell_height, y_sp end
     local head = (head_attr and head_attr > 1) and (head_attr - 1) / 1000 or 0
     return cell_height + (squeeze_attr - 1) / 1000 * em, y_sp - head * em
 end
@@ -136,7 +144,7 @@ local function handle_glyph_node(curr, p_head, pos, params, ctx)
         pos.cell_height, pos.y_sp,
         D.get_attribute(curr, constants.ATTR_PUNCT_SQUEEZE),
         D.get_attribute(curr, constants.ATTR_PUNCT_SQUEEZE_HEAD),
-        fdata and fdata.size)
+        fdata and fdata.size, pos)
     glyph_params.cell_height = ink_h
     glyph_params.y_sp = ink_y
     glyph_params.band_y_offset_sp = pos.band_y_offset_sp or 0
