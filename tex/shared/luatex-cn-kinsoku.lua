@@ -209,7 +209,30 @@ end
 -- Squeeze-in vs push-out decision (禁则的解决方式)
 -- ============================================================================
 
-local COST_EPS = 1e-9
+-- 形变差异小到什么程度算「一样」？这一层**不能硬编码绝对容差**：
+-- adjust.lua 声明「不假设单位」（调用方可以传 em 比值，也可以传 sp），
+-- 1 em = 655360 sp，同一个常数在两种量纲下差六个数量级。硬编码 1e-7 的
+-- 后果是：在 sp 量纲下任何 ≥1 sp 的差异都能分出胜负，clreq 明文的
+-- 「全等 → 先挤进」兜底几乎永不触发，决策由浮点舍入决定（1 sp ≈
+-- 0.0000002 英寸，两个方案视觉完全一致）。
+--
+-- 因此容差按**输入规模**推导：取两个候选里最大的 gap 自然宽度作标尺。
+-- 后端也可以用 opts.tolerance 显式指定（它知道自己的量纲）。
+local TOL_RATIO = 1e-3          -- 标尺的千分之一；0.5em 的标点空白 → 0.0005em
+local TOL_FLOOR = 1e-12         -- 防止全零输入退化成「一切相等」
+
+local function scale_of(cands)
+    local scale = 0
+    for _, key in ipairs({ "squeeze", "stretch" }) do
+        local c = cands[key]
+        if c then
+            for _, g in ipairs(c.gaps) do
+                if g.width > scale then scale = g.width end
+            end
+        end
+    end
+    return scale
+end
 
 -- 代价的比较次序就是 clreq 的挤压优先顺序：越靠后的类越「贵」（越是最后
 -- 手段）。拉伸类 western_word / cjk_western 已在其中；兜底均分动的是字距，
@@ -229,10 +252,11 @@ local LAST_RESORT = COST_ORDER[#COST_ORDER]   -- "inter_char"
 -- 取每类的最大值而不是总和：类内是同时、同等量处理（clreq 原文），最大值
 -- 就是「这一类被动用的程度」，且与 gap 个数无关，两个候选 gap 数不同也可比。
 --
+-- @param tol (number) 容差，与 gaps 同一单位
 -- @return (table|nil) class → 最大形变量；nil 表示该候选不可行（装不下）
-local function candidate_profile(target, gaps)
+local function candidate_profile(target, gaps, tol)
     local r = adjust.solve(target, gaps)
-    if r.deficit > COST_EPS then
+    if r.deficit > tol then
         return nil, r          -- 全部触底仍装不下
     end
     local prof = {}
@@ -241,9 +265,9 @@ local function candidate_profile(target, gaps)
         local w = g.width
         local min = g.min or w
         local max = g.max or w
-        if max - min > COST_EPS then
+        if max - min > tol then
             local delta = r.widths[i] - w
-            if math.abs(delta) > COST_EPS then
+            if math.abs(delta) > tol then
                 local class
                 if delta < 0 then
                     class = g.shrink_class or LAST_RESORT
@@ -263,11 +287,11 @@ end
 -- 全等时返回 0——由调用方按 clreq「先挤进，后推出」选挤进。
 -- @return (number) <0 表示 a 更优，>0 表示 b 更优，0 表示等价
 -- @return (string|nil) 分出胜负的类别
-local function compare_profiles(a, b)
+local function compare_profiles(a, b, tol)
     for i = #COST_ORDER, 1, -1 do
         local class = COST_ORDER[i]
         local da, db = a[class] or 0, b[class] or 0
-        if math.abs(da - db) > 1e-7 then
+        if math.abs(da - db) > tol then
             return (da < db) and -1 or 1, class
         end
     end
@@ -286,10 +310,22 @@ end
 -- 比较用词典序（见 candidate_profile 的说明），先看谁少动最后手段（字距），
 -- 打平再往优先顺序前面看。clreq 的口径是「先挤进，后推出」，全等时选挤进。
 --
+-- **这是对 clreq 字面的有意偏离**：规范说的是「最后没有挤压机会，再从前一
+-- 行取最后一个字」——即只要挤得进就该挤进。词典序求的是「尽量少动最后
+-- 手段」，两者在一种情形下分歧：挤进可行、但要把字距压得比推出拉得更狠时，
+-- 词典序选推出。例如两侧都有标点空白的列，挤进要把字距从 0.1em 压到
+-- 0.048em（−52%），推出只需拉到 0.132em（+32%）——照规范字面该挤进，
+-- 但 −52% 的字距很难看。取舍记在 docs/CLREQ-VERTICAL-ADJUST-DESIGN.md §6，
+-- 将来的符合度矩阵要如实标为「部分实现（有意偏离）」。
+--
 -- @param cands (table) {
 --   squeeze = { target = number, gaps = {...} },  -- 多收一个字的排布
 --   stretch = { target = number, gaps = {...} },  -- 少一个字的排布
 -- }  两者的 target 均为「gap 可用总量」= 列可用长度 − 该候选的刚性总量。
+-- @param opts (table|nil) { tolerance = number }
+--   形变差异小于 tolerance 视为等价（与 gaps 同一单位）。缺省按输入规模
+--   自适应（见 TOL_RATIO）——共享层不假设单位，硬编码绝对容差会在 sp 量纲
+--   下让「全等 → 先挤进」这条兜底失效。
 -- @return (string) "squeeze" | "stretch"
 -- @return (table) {
 --   squeeze_profile, stretch_profile,  -- class → 该类最大形变量（nil = 不可行）
@@ -297,17 +333,22 @@ end
 --   decided_by,                        -- 分出胜负的类别（nil = 全等，按先挤进）
 --   squeeze, stretch,                  -- adjust.solve 结果，可直接落盘
 -- }
-function M.resolve_overflow(cands)
+function M.resolve_overflow(cands, opts)
+    local tol = (opts and opts.tolerance)
+        or math.max(TOL_FLOOR, scale_of(cands) * TOL_RATIO)
     local sq_prof, sq_res, st_prof, st_res
     if cands.squeeze then
-        sq_prof, sq_res = candidate_profile(cands.squeeze.target, cands.squeeze.gaps)
+        sq_prof, sq_res = candidate_profile(cands.squeeze.target,
+            cands.squeeze.gaps, tol)
     end
     if cands.stretch then
-        st_prof, st_res = candidate_profile(cands.stretch.target, cands.stretch.gaps)
+        st_prof, st_res = candidate_profile(cands.stretch.target,
+            cands.stretch.gaps, tol)
     end
     local detail = {
         squeeze_profile = sq_prof, stretch_profile = st_prof,
         squeeze = sq_res, stretch = st_res,
+        tolerance = tol,
         squeeze_gap = sq_prof and sq_prof[LAST_RESORT] or math.huge,
         stretch_gap = st_prof and st_prof[LAST_RESORT] or math.huge,
     }
@@ -318,7 +359,7 @@ function M.resolve_overflow(cands)
     end
     if not st_prof then return "squeeze", detail end
 
-    local cmp, class = compare_profiles(sq_prof, st_prof)
+    local cmp, class = compare_profiles(sq_prof, st_prof, tol)
     detail.decided_by = class
     if cmp > 0 then return "stretch", detail end
     return "squeeze", detail

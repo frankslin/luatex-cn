@@ -265,6 +265,45 @@ test_utils.run_test("resolve_overflow: 代价相等时先挤进（clreq 先挤�
     test_utils.assert_eq(action, "squeeze")
 end)
 
+test_utils.run_test("resolve_overflow: sp 量纲下微小差异仍算全等（先挤进）", function()
+    -- 生产路径传的是 sp（1 em = 655360 sp），em 量纲的单测看不见这个问题：
+    -- 容差若硬编码成绝对值，sp 下任何 ≥1 sp 的差异都会分出胜负，clreq 明文
+    -- 的「全等 → 先挤进」几乎永不触发，决策由浮点舍入决定。
+    local EM = 655360 * 14              -- 14pt 字幅
+    local GAP = math.floor(EM * 0.1)
+    local function sp_gaps(n)
+        local t = {}
+        for _ = 1, n do
+            t[#t + 1] = { width = GAP, min = 0, max = GAP,
+                          shrink_class = "inter_char", fallback = true }
+        end
+        return t
+    end
+    -- 两个候选的字距形变只差 2 sp（约 0.0000002 英寸，视觉完全一致）
+    local action, d = kinsoku.resolve_overflow({
+        squeeze = { target = 20 * GAP, gaps = sp_gaps(20) },
+        stretch = { target = 20 * GAP - 2, gaps = sp_gaps(20) },
+    })
+    test_utils.assert_true(d.tolerance > 2,
+        "容差应随输入规模放大到远大于 1 sp，实际 " .. tostring(d.tolerance))
+    test_utils.assert_nil(d.decided_by)       -- 判为全等
+    test_utils.assert_eq(action, "squeeze")   -- 兜底：先挤进
+end)
+
+test_utils.run_test("resolve_overflow: tolerance 可由后端显式指定", function()
+    local gaps_a = gaps_of(4, 1)
+    local gaps_b = gaps_of(4, 1)
+    -- 形变差 0.05：容差 0.1 时算全等（先挤进），容差 0.001 时推出胜出
+    local cands = {
+        squeeze = { target = 3.8, gaps = gaps_a },   -- 每个字距压 0.05
+        stretch = { target = 4.0, gaps = gaps_b },   -- 不动
+    }
+    test_utils.assert_eq(kinsoku.resolve_overflow(cands, { tolerance = 0.1 }),
+        "squeeze")
+    test_utils.assert_eq(kinsoku.resolve_overflow(cands, { tolerance = 0.001 }),
+        "stretch")
+end)
+
 test_utils.run_test("resolve_overflow: 刚性 gap 不进形变剖面", function()
     -- 全刚性的候选没有可动的 gap，剖面全零
     local rigid = { { width = 1, min = 1, max = 1 }, { width = 1, min = 1, max = 1 } }

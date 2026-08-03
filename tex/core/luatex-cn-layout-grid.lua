@@ -1779,6 +1779,11 @@ local function calculate_kinsoku_action(col_buffer, t_node, ctx, grid_height)
     local action, detail = kinsoku.resolve_overflow({
         squeeze = { target = available - sq.rigid_total, gaps = sq.gaps },
         stretch = { target = available - st.rigid_total, gaps = st.gaps },
+    }, {
+        -- 本后端的量纲是 sp，容差按字幅千分之一（≈0.014pt）显式给出：
+        -- 差这么点的两个方案视觉完全一致，该落到 clreq 的「全等 → 先挤进」，
+        -- 而不是由浮点舍入决定。共享层不知道量纲，只能自适应推导。
+        tolerance = grid_height * 0.001,
     })
 
     dbg.log(string.format(
