@@ -206,7 +206,7 @@ test_utils.run_test("resolve_overflow: 装不下就推出", function()
     test_utils.assert_eq(action, "stretch")
 end)
 
-test_utils.run_test("resolve_overflow: 形变小的一方胜出", function()
+test_utils.run_test("resolve_overflow: 字距形变小的一方胜出", function()
     -- 挤进：4 个 1.0 的字距压成 0.9（形变 0.1）
     -- 推出：2 个 1.0 的字距拉到 2.0（形变 1.0）
     local action, d = kinsoku.resolve_overflow({
@@ -214,21 +214,47 @@ test_utils.run_test("resolve_overflow: 形变小的一方胜出", function()
         stretch = { target = 4.0, gaps = gaps_of(2, 1) },
     })
     test_utils.assert_eq(action, "squeeze")
-    test_utils.assert_true(d.squeeze_cost < d.stretch_cost)
+    test_utils.assert_eq(d.decided_by, "inter_char")
+    test_utils.assert_true(d.squeeze_gap < d.stretch_gap)
 end)
 
-test_utils.run_test("resolve_overflow: 收标点空白比压字距便宜", function()
-    -- 同样要吞掉 0.5：挤进候选靠一个逗号空白（clreq 挤压第 5 级），
-    -- 推出候选靠字距（第 8 级，最后手段）。逗号那边应当胜出。
-    local squeeze = gaps_of(3, 1)
+test_utils.run_test("resolve_overflow: 收标点空白不算代价，字距零形变必胜", function()
+    -- 这是加权平均口径下会翻错的那一类（随机扫描 4000 组里约 13%）：
+    -- 挤进候选把超长量**全部**由逗号空白吸收，字距一动不动；推出候选把
+    -- 每个字距都拉开。clreq 的优先顺序是词典序——先看谁少动最后手段
+    -- （字距），标点空白被收满在规范语义里是零代价的正常操作。
+    -- 加权求和会把「形变 0.5 的逗号」算得比「形变 0.02 的字距」贵得多。
+    local squeeze = gaps_of(4, 1)
     squeeze[#squeeze + 1] = { width = 0.5, min = 0, max = 0.5,
                               shrink_class = "comma_group" }
     local action, d = kinsoku.resolve_overflow({
-        squeeze = { target = 3.0, gaps = squeeze },   -- 收掉整个逗号空白
-        stretch = { target = 1.5, gaps = gaps_of(2, 1) },  -- 字距各压 0.25
+        -- 挤进：自然 4.5 → 目标 4.0，0.5 全由逗号空白吃掉，字距保持 1.0
+        squeeze = { target = 4.0, gaps = squeeze },
+        -- 推出：自然 2.0 → 目标 2.1，两个字距各拉开 0.05
+        stretch = { target = 2.1, gaps = gaps_of(2, 1) },
     })
     test_utils.assert_eq(action, "squeeze")
-    test_utils.assert_true(d.squeeze_cost < d.stretch_cost)
+    test_utils.assert_eq(d.squeeze_gap, 0)
+    test_utils.assert_true(d.stretch_gap > 0)
+    test_utils.assert_eq(d.decided_by, "inter_char")
+end)
+
+test_utils.run_test("resolve_overflow: 字距打平后才比标点类", function()
+    -- 两侧字距形变相同 → 词典序继续往优先顺序前面看，少动标点的一方胜出
+    local squeeze = gaps_of(2, 1)
+    squeeze[#squeeze + 1] = { width = 0.5, min = 0, max = 0.5,
+                              shrink_class = "comma_group" }
+    local stretch = gaps_of(2, 1)
+    stretch[#stretch + 1] = { width = 0.5, min = 0, max = 0.5,
+                              shrink_class = "comma_group" }
+    local action, d = kinsoku.resolve_overflow({
+        squeeze = { target = 2.3, gaps = squeeze },   -- 逗号让出 0.2，字距不动
+        stretch = { target = 2.4, gaps = stretch },   -- 逗号让出 0.1，字距不动
+    })
+    test_utils.assert_eq(d.squeeze_gap, 0)
+    test_utils.assert_eq(d.stretch_gap, 0)
+    test_utils.assert_eq(d.decided_by, "comma_group")
+    test_utils.assert_eq(action, "stretch")
 end)
 
 test_utils.run_test("resolve_overflow: 代价相等时先挤进（clreq 先挤进后推出）", function()
@@ -239,14 +265,14 @@ test_utils.run_test("resolve_overflow: 代价相等时先挤进（clreq 先挤�
     test_utils.assert_eq(action, "squeeze")
 end)
 
-test_utils.run_test("resolve_overflow: 刚性 gap 不参与代价平均", function()
-    -- 全刚性的候选没有可比的形变，代价为 0
+test_utils.run_test("resolve_overflow: 刚性 gap 不进形变剖面", function()
+    -- 全刚性的候选没有可动的 gap，剖面全零
     local rigid = { { width = 1, min = 1, max = 1 }, { width = 1, min = 1, max = 1 } }
     local action, d = kinsoku.resolve_overflow({
         squeeze = { target = 2, gaps = rigid },
         stretch = { target = 1, gaps = gaps_of(2, 1) },
     })
-    test_utils.assert_eq(d.squeeze_cost, 0)
+    test_utils.assert_eq(d.squeeze_gap, 0)
     test_utils.assert_eq(action, "squeeze")
 end)
 

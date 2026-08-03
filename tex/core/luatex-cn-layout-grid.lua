@@ -1782,9 +1782,9 @@ local function calculate_kinsoku_action(col_buffer, t_node, ctx, grid_height)
     })
 
     dbg.log(string.format(
-        "kinsoku cost: squeeze=%.2f stretch=%.2f (N=%d) → %s [p:%d c:%d]",
-        detail.squeeze_cost, detail.stretch_cost, N, action,
-        ctx.cur_page, ctx.cur_col))
+        "kinsoku cost: 字距形变 squeeze=%.1f stretch=%.1f sp，判于 %s (N=%d) → %s [p:%d c:%d]",
+        detail.squeeze_gap, detail.stretch_gap, detail.decided_by or "全等/先挤进",
+        N, action, ctx.cur_page, ctx.cur_col))
 
     return action
 end

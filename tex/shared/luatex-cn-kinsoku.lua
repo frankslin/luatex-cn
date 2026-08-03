@@ -209,44 +209,69 @@ end
 -- Squeeze-in vs push-out decision (禁则的解决方式)
 -- ============================================================================
 
--- 形变代价的权重：clreq 挤压/拉伸优先顺序里越靠前的类越「便宜」，动它付出的
--- 代价越小；没有归类的 gap（兜底均分的字距）最贵。权重直接取顺序序号。
-local SHRINK_WEIGHT = {}
-for i, class in ipairs(adjust.SHRINK_ORDER) do SHRINK_WEIGHT[class] = i end
-local STRETCH_WEIGHT = {}
-for i, class in ipairs(adjust.STRETCH_ORDER) do STRETCH_WEIGHT[class] = i end
-local FALLBACK_WEIGHT = #adjust.SHRINK_ORDER + 1
-
 local COST_EPS = 1e-9
 
--- 一个候选排布的代价：解出来之后，各 gap 相对自然值的形变量按类加权平均。
--- 只有真正可动的 gap（min < width 或 max > width）参与——刚性 gap 不是调整
--- 手段，不该稀释平均值。全刚性（无可动 gap）时代价为 0：没有可比的形变。
-local function candidate_cost(target, gaps)
+-- 代价的比较次序就是 clreq 的挤压优先顺序：越靠后的类越「贵」（越是最后
+-- 手段）。拉伸类 western_word / cjk_western 已在其中；兜底均分动的是字距，
+-- 归入 inter_char。
+local COST_ORDER = adjust.SHRINK_ORDER
+local LAST_RESORT = COST_ORDER[#COST_ORDER]   -- "inter_char"
+
+--- 一个候选排布的形变剖面：按类记下该类里被动用得最狠的那个 gap 动了多少。
+--
+-- **不能把各类形变加权求和**：clreq 的优先顺序是词典序（第 1 级用尽才轮到
+-- 第 2 级），不是带权重的折扣。把逗号空白收满 0.5 em 在 clreq 语义里是零
+-- 代价的正常操作，而线性权重会把它算成「形变 0.5 的昂贵操作」——量级差
+-- 远大于 5 与 8 的权重差，于是「多给一个规范允许的挤压手段」反而让这个
+-- 候选更贵。实测（4000 组随机列）会翻转约 13% 的决策，且方向一律是把
+-- 「字距零形变」的挤进方案judged 成不如「字距全动」的推出方案。
+--
+-- 取每类的最大值而不是总和：类内是同时、同等量处理（clreq 原文），最大值
+-- 就是「这一类被动用的程度」，且与 gap 个数无关，两个候选 gap 数不同也可比。
+--
+-- @return (table|nil) class → 最大形变量；nil 表示该候选不可行（装不下）
+local function candidate_profile(target, gaps)
     local r = adjust.solve(target, gaps)
     if r.deficit > COST_EPS then
-        -- 全部触底仍装不下：这个候选不可行
-        return math.huge, r
+        return nil, r          -- 全部触底仍装不下
     end
-    local wsum, dsum = 0, 0
+    local prof = {}
+    for _, class in ipairs(COST_ORDER) do prof[class] = 0 end
     for i, g in ipairs(gaps) do
         local w = g.width
         local min = g.min or w
         local max = g.max or w
         if max - min > COST_EPS then
             local delta = r.widths[i] - w
-            local weight
-            if delta < 0 then
-                weight = SHRINK_WEIGHT[g.shrink_class] or FALLBACK_WEIGHT
-            else
-                weight = STRETCH_WEIGHT[g.stretch_class] or FALLBACK_WEIGHT
+            if math.abs(delta) > COST_EPS then
+                local class
+                if delta < 0 then
+                    class = g.shrink_class or LAST_RESORT
+                else
+                    class = g.stretch_class or LAST_RESORT
+                end
+                local d = math.abs(delta)
+                if prof[class] == nil then prof[class] = 0 end
+                if d > prof[class] then prof[class] = d end
             end
-            wsum = wsum + weight
-            dsum = dsum + weight * math.abs(delta)
         end
     end
-    if wsum <= 0 then return 0, r end
-    return dsum / wsum, r
+    return prof, r
+end
+
+-- 词典序比较：从最后手段往前逐级比，先分出胜负的那一级说了算。
+-- 全等时返回 0——由调用方按 clreq「先挤进，后推出」选挤进。
+-- @return (number) <0 表示 a 更优，>0 表示 b 更优，0 表示等价
+-- @return (string|nil) 分出胜负的类别
+local function compare_profiles(a, b)
+    for i = #COST_ORDER, 1, -1 do
+        local class = COST_ORDER[i]
+        local da, db = a[class] or 0, b[class] or 0
+        if math.abs(da - db) > 1e-7 then
+            return (da < db) and -1 or 1, class
+        end
+    end
+    return 0, nil
 end
 
 --- Resolve a line/column overflow caused by a kinsoku violation: is it cheaper
@@ -258,30 +283,45 @@ end
 -- up the inter-character spacing. A backend that compares raw gap sizes cannot
 -- know this and will push out lines the solver could have absorbed.
 --
--- clreq 的口径是「先挤进，后推出」，因此代价相等时选挤进。
+-- 比较用词典序（见 candidate_profile 的说明），先看谁少动最后手段（字距），
+-- 打平再往优先顺序前面看。clreq 的口径是「先挤进，后推出」，全等时选挤进。
 --
 -- @param cands (table) {
 --   squeeze = { target = number, gaps = {...} },  -- 多收一个字的排布
 --   stretch = { target = number, gaps = {...} },  -- 少一个字的排布
 -- }  两者的 target 均为「gap 可用总量」= 列可用长度 − 该候选的刚性总量。
 -- @return (string) "squeeze" | "stretch"
--- @return (table) { squeeze_cost, stretch_cost, squeeze, stretch }
---   （squeeze / stretch 为对应的 adjust.solve 结果，供后端直接落盘或调试）
+-- @return (table) {
+--   squeeze_profile, stretch_profile,  -- class → 该类最大形变量（nil = 不可行）
+--   squeeze_gap, stretch_gap,          -- 字距形变量，日志用的头条数字
+--   decided_by,                        -- 分出胜负的类别（nil = 全等，按先挤进）
+--   squeeze, stretch,                  -- adjust.solve 结果，可直接落盘
+-- }
 function M.resolve_overflow(cands)
-    local sq_cost, sq_res = math.huge, nil
-    local st_cost, st_res = math.huge, nil
+    local sq_prof, sq_res, st_prof, st_res
     if cands.squeeze then
-        sq_cost, sq_res = candidate_cost(cands.squeeze.target, cands.squeeze.gaps)
+        sq_prof, sq_res = candidate_profile(cands.squeeze.target, cands.squeeze.gaps)
     end
     if cands.stretch then
-        st_cost, st_res = candidate_cost(cands.stretch.target, cands.stretch.gaps)
+        st_prof, st_res = candidate_profile(cands.stretch.target, cands.stretch.gaps)
     end
     local detail = {
-        squeeze_cost = sq_cost, stretch_cost = st_cost,
+        squeeze_profile = sq_prof, stretch_profile = st_prof,
         squeeze = sq_res, stretch = st_res,
+        squeeze_gap = sq_prof and sq_prof[LAST_RESORT] or math.huge,
+        stretch_gap = st_prof and st_prof[LAST_RESORT] or math.huge,
     }
-    if sq_cost <= st_cost then return "squeeze", detail end
-    return "stretch", detail
+    -- 不可行的候选直接出局；都不可行时按 clreq 选挤进（推出也放不下，
+    -- 至少挤进不会多留一列空）
+    if not sq_prof then
+        return st_prof and "stretch" or "squeeze", detail
+    end
+    if not st_prof then return "squeeze", detail end
+
+    local cmp, class = compare_profiles(sq_prof, st_prof)
+    detail.decided_by = class
+    if cmp > 0 then return "stretch", detail end
+    return "squeeze", detail
 end
 
 --- For a run of `run_len` identical two-em members (dash/ellipsis), whether
