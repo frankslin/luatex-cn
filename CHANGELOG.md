@@ -27,6 +27,7 @@
 
 变更：
 - 竖排标点宽度调整改为上下文相关（clreq）— 夹在汉字之间的单个标点占满一字幅，只有相邻标点连排才缩减（夹注符号参与时 2→1.5 字幅，可用 adjacent-punct=1 收到 1 字幅）。按文档类分档：ltc-cn-vbook / ltc-tw-vbook 默认启用（squeeze-mode=context），ltc-guji 保持原有无条件挤压（squeeze-mode=legacy），古籍三套基线零变化；vbook 相关基线与史记卷十六·现代示例已重存。挤压方向按 clreq「空白在哪一侧就往哪边让」：大陆式点号收回末端空白后字面原地不动、后一符号上移，开始夹注符号收回始端空白后字面向后贴紧被夹注内容
+- 字面分布改为度量驱动（全矩阵：大陆/台湾 × 横排/竖排）— 不再依赖字体自身的字面设计，读字形 boundingbox 把**墨迹**锚到本风格的规范位置（共享层 tex/shared/luatex-cn-punct-anchors.lua，横竖排共用）：大陆式直排偏靠右上（句号墨心 (0.857, 0.55)em、逗号顿号 (0.857, 0.31)em、中点类横向 0.857）、大陆式横排靠左下（思源宋体样板）、台湾式横竖一律居中（TW-Kai 样板）。字体把墨迹画在哪不再影响版面：TW-Kai（两向居中的台湾字体）排大陆式、思源宋体/京華老宋体（左下/右上的大陆字体）排台湾式，落点都与样板一致。样板字体自身零位移（0.002em 死区），故 hori / hori-taiwan / tw-vbook / cn-vbook（TW-Kai 部分）基线 bit 不变。竖排 clreq 断言新增「大陆式偏靠」守卫（Tm 右移 >0.2em，居中即回归）。竖排台湾式锚定仅在 squeeze-mode=context 挡位（vbook 类）启用，ltc-guji（taiwan+legacy）字面维持字体原样；大陆式无 boundingbox 时退回原经验偏移路径。新增 scripts/build/build_punct_review.py 生成 2 字体 × 2 风格 × 横竖排八格审阅图（docs/punct-review.png 入库，随标点改动重生成供 review 对比）
 - 脚注标号两侧间距改为「前紧后松」— 标号语义上依附前面被标注的内容，故标号前收到 0.05 字幅（紧贴前文）、标号后放到 0.30 字幅（与后文分开），两侧均按标号自身字号计算；标号后紧跟标点时（「黃︻一︼，」）二者同属依附前文的收尾单元，仍按普通字距不拉开。此前两侧都是 0.1 字幅，︼ 会与紧随其后的墨围方框边线贴死。仅自然排版（ltc-cn-vbook / ltc-tw-vbook）生效，网格模式的古籍基线不变
 - 标点风格预设与横排统一 — \标点设置 新增 style(mainland|taiwan|none)、squeeze-mode、adjacent-punct、line-start-bracket、line-end-punct 五个键，键名与取值同 luatex-cn-hori；style=none 为 clreq「不调整」预设（既不挤压也不偏靠）
 

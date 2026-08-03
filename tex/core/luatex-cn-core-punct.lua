@@ -25,6 +25,7 @@ local constants = require('core.luatex-cn-constants')
 local debug_mod = require('debug.luatex-cn-debug')
 local shared_punct = require('shared.luatex-cn-punct-table')
 local punct_squeeze = require('shared.luatex-cn-punct-squeeze')
+local punct_anchors = require('shared.luatex-cn-punct-anchors')
 local dbg = debug_mod.get_debugger('punct')
 
 -- ============================================================================
@@ -808,13 +809,21 @@ local MAINLAND_OFFSETS = {
     close    = { x = 0, y = 0 },       -- 」】）centered in cell by calc_grid_position
 }
 
--- Taiwan style: all punctuation centered in the grid cell (no extra offset)
--- This is the default rendering behavior, so no offsets needed.
+-- 度量驱动的字面分布（差距分析 4.1 第 5 条）：不再「经验偏移 + 部分字体
+-- 补偿」，而是直接把字形**墨迹**锚到字幅内的规范位置。锚点表与位移计算
+-- 在共享层 shared/luatex-cn-punct-anchors.lua（HR5：clreq 规则只写在
+-- tex/shared/，横排 hori-pipeline 用同一模块）：
+--   大陆式直排：点号偏靠右上（x=0.857，贴前字）；
+--   台湾式：字面居中——**字体自己居不居中无所谓**：大陆惯例设计的字体
+--   （思源宋体、京華老宋体）横排形在左下、vert 形在右上，不锚定的话
+--   台湾式版面会随字体漂移。
+-- 教训：锚点不能从 Tm 相对坐标量——xoffset 会写进 Tm，量出来的只是
+-- 字形自身的 bbox 中心，偏靠会整个丢失、退化为居中。
+-- 无 boundingbox 可查时，大陆式退回上面的经验偏移路径，台湾式不动。
 
 --- Render stage: apply punctuation style offsets
--- For mainland style, shifts dot-class punctuation (fullstop, comma)
--- toward the upper-right corner of the character grid.
--- Taiwan style leaves punctuation centered (no adjustments).
+-- Anchors the ink of dot/middle punctuation per style (mainland 偏靠 /
+-- taiwan 居中). style=none is the clreq 不调整 preset — no offsets.
 -- @param head (node) The page node list head
 -- @param layout_map (table) Layout map
 -- @param render_ctx (table) Render context
@@ -826,9 +835,12 @@ local MAINLAND_OFFSETS = {
 function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p_total_cols)
     if not ctx then return head end
 
-    -- Taiwan style: no adjustments needed (punctuation centered by default);
-    -- style=none is the clreq 不调整 preset — likewise no offsets.
-    if ctx.style ~= "mainland" then return head end
+    -- style=none：clreq 不调整预设，字面不挪动。
+    -- 台湾式的度量锚定只在 context 挡位（vbook 类）启用：ltc-guji 默认
+    -- taiwan + legacy，字面位置维持字体原样（R5：古籍版面不动）。
+    -- 大陆式沿 #138 的口径不加挡位（现存大陆式文档类均为 context）。
+    local do_taiwan = (ctx.style == "taiwan" and ctx.squeeze_mode == "context")
+    if ctx.style ~= "mainland" and not do_taiwan then return head end
 
     -- Mainland style: offset dot-class punctuation
     local grid_width = engine_ctx.g_width
@@ -851,14 +863,41 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     local cur_x = D.getfield(t, "xoffset") or 0
                     local cur_y = D.getfield(t, "yoffset") or 0
 
+                    local char = D.getfield(t, "char")
+                    local fid = D.getfield(t, "font")
+
+                    -- 度量驱动路径：有墨迹 bbox 就直接锚定，跳过下面的
+                    -- 「经验偏移 + 字体补偿」。锚点表按**原始码位**查
+                    -- （vert GSUB 落到 PUA 的字形先解析回来），bbox 用
+                    -- 实际绘制的字形查。
+                    local metric_done = false
+                    if fid and char then
+                        local fi = font.getfont(fid)
+                        local desc = fi and fi.descriptions and fi.descriptions[char]
+                        local bb = desc and desc.boundingbox
+                        local upem = fi and fi.units_per_em or 1000
+                        local em_sp = fi and fi.size
+                        local orig = char
+                        if char >= 0xE000 then
+                            orig = resolve_original_codepoint(fid, char) or char
+                        end
+                        local dx, dy = punct_anchors.offsets(
+                            orig, ctx.style, "vertical", bb, upem, em_sp)
+                        if dx then
+                            D.setfield(t, "xoffset", cur_x + dx)
+                            D.setfield(t, "yoffset", cur_y + dy)
+                            count = count + 1
+                            metric_done = true
+                        end
+                    end
+
                     -- Font ink-center compensation: some fonts have punctuation
                     -- glyphs whose ink is not centered in the advance width.
                     -- Compensate so the glyph visually centers before applying
                     -- the mainland style offset.
-                    local char = D.getfield(t, "char")
-                    local fid = D.getfield(t, "font")
+                    -- 经验偏移是大陆式的退路；台湾式无 bbox 时不动（字体原样）。
                     local glyph_width = grid_width -- fallback
-                    if fid and char then
+                    if not metric_done and ctx.style == "mainland" and fid and char then
                         local fi = font.getfont(fid)
                         local ci = fi and fi.characters and fi.characters[char]
                         if ci and ci.width then glyph_width = ci.width end
@@ -898,22 +937,24 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     -- 偏靠量按**该字自身的字幅**计，不是版面网格：夹注、
                     -- 批注、脚注等小字的字幅小于正文，用版面网格算会让小字
                     -- 的标点偏出所在列（偏移量固定而字幅变小）。
-                    local own_w, own_h = grid_width, grid_height
-                    if fid then
-                        local fi = font.getfont(fid)
-                        local fs = fi and fi.size
-                        if fs and fs > 0 and grid_height > 0 then
-                            local scale = fs / grid_height
-                            own_w = grid_width * scale
-                            own_h = fs
+                    if not metric_done and ctx.style == "mainland" then
+                        local own_w, own_h = grid_width, grid_height
+                        if fid then
+                            local fi = font.getfont(fid)
+                            local fs = fi and fi.size
+                            if fs and fs > 0 and grid_height > 0 then
+                                local scale = fs / grid_height
+                                own_w = grid_width * scale
+                                own_h = fs
+                            end
                         end
-                    end
-                    local dx = math.floor(own_w * style_offset.x + 0.5)
-                    local dy = math.floor(own_h * style_offset.y + 0.5)
+                        local dx = math.floor(own_w * style_offset.x + 0.5)
+                        local dy = math.floor(own_h * style_offset.y + 0.5)
 
-                    D.setfield(t, "xoffset", cur_x + dx)
-                    D.setfield(t, "yoffset", cur_y + dy)
-                    count = count + 1
+                        D.setfield(t, "xoffset", cur_x + dx)
+                        D.setfield(t, "yoffset", cur_y + dy)
+                        count = count + 1
+                    end
                 end
             end
         end

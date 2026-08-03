@@ -20,6 +20,7 @@ local spacing = require("hori.luatex-cn-hori-spacing")
 local adjust_line = require("hori.luatex-cn-hori-adjust-line")
 local linemark = require("hori.luatex-cn-hori-linemark")
 local punct_table = require("shared.luatex-cn-punct-table")
+local punct_anchors = require("shared.luatex-cn-punct-anchors")
 
 local pipeline = {}
 
@@ -186,6 +187,31 @@ end
 -- head never changes.
 -- @param head_d (direct node) list head
 -- @return (direct node) list head (unchanged)
+-- clreq 字面分布（度量锚定，共享层 punct-anchors）：把点号/中点类的墨迹
+-- 挪到本风格的规范位置——大陆式靠左下（GB 惯例）、台湾式居中。字体把
+-- 墨迹画在哪是字体的设计惯例（TW-Kai 两向居中、思源宋体左下），排版
+-- 风格不应随字体漂移：大陆式文档用 TW-Kai 时点号也应落到左下，台湾式
+-- 文档用思源宋体时也应居中。xoffset/yoffset 只挪字面不动 advance，
+-- 对断行、间隙与 H2 二次分配均无影响。style=none / 无 bbox 时不动。
+local function apply_ink_anchor(g)
+    local c = D.getfield(g, "char")
+    if not c then return end
+    -- 先查锚点表（一次哈希查找），绝大多数字形（汉字/西文）在此返回，
+    -- 不触碰 font.getfont
+    if not punct_anchors.anchor(c, opts.style, "horizontal") then return end
+    local fid = D.getfield(g, "font")
+    local f = fid and font.getfont(fid)
+    local desc = f and f.descriptions and f.descriptions[c]
+    local bb = desc and desc.boundingbox
+    local dx, dy = punct_anchors.offsets(c, opts.style, "horizontal",
+        bb, (f and f.units_per_em) or 1000, f and f.size)
+    if dx then
+        D.setfield(g, "xoffset", dx)   -- 绝对写入：重复处理幂等
+        D.setfield(g, "yoffset", dy)
+    end
+end
+pipeline.apply_ink_anchor = apply_ink_anchor
+
 function pipeline.process(head_d)
     local prev_glyph = nil
     local prev_node = nil     -- node immediately before curr in the walk
@@ -216,6 +242,7 @@ function pipeline.process(head_d)
                 local conv = c0 and punct_table.quote_convert(c0, quote_target)
                 if conv then D.setfield(curr, "char", conv) end
             end
+            apply_ink_anchor(curr)
             if prev_glyph and not blocked then
                 local a = D.getfield(prev_glyph, "char")
                 local c = D.getfield(curr, "char")

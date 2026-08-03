@@ -193,4 +193,33 @@ test_utils.run_test("head is preserved", function()
     test_utils.assert_eq(head, g1)
 end)
 
+test_utils.run_test("ink anchor: 大陆式把居中字形的点号墨迹挪到左下", function()
+    -- 模拟 TW-Kai（字形居中，bbox 中心 (0.495, 0.311)）在大陆式横排：
+    -- 墨迹应被挪去左下锚点 → xoffset/yoffset 均为负
+    local orig_getfont = font.getfont
+    font.getfont = function(id)
+        return { size = EM, units_per_em = 1000,
+                 descriptions = { [0xFF0C] = { boundingbox = { 425, 241, 565, 381 } } } }
+    end
+    local g = glyph(0xFF0C)
+    pipeline.apply_ink_anchor(g)
+    font.getfont = orig_getfont
+    test_utils.assert_true((g.xoffset or 0) < 0, "应向左挪")
+    test_utils.assert_true((g.yoffset or 0) < 0, "应向下挪")
+end)
+
+test_utils.run_test("ink anchor: 汉字与无 bbox 字形不动", function()
+    local orig_getfont = font.getfont
+    font.getfont = function(id)
+        return { size = EM, units_per_em = 1000, descriptions = {} }
+    end
+    local h = glyph(0x4E00)
+    pipeline.apply_ink_anchor(h)
+    local p = glyph(0xFF0C)   -- 有锚点但查不到 bbox
+    pipeline.apply_ink_anchor(p)
+    font.getfont = orig_getfont
+    test_utils.assert_eq(h.xoffset or 0, 0)
+    test_utils.assert_eq(p.xoffset or 0, 0)
+end)
+
 print("All hori-pipeline tests passed.")
