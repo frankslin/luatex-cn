@@ -509,4 +509,79 @@ test_utils.run_test("marker_gap_sp: 未知 side 按前侧处理", function()
         layout_grid._internal.marker_gap_sp(em, "before"))
 end)
 
+-- ============================================================================
+-- build_column_gaps（clreq 行内调整：列 → gap 序列，设计 §2）
+-- ============================================================================
+
+local EM = 65536 * 14
+
+-- 造一个条目；permille 参数按 1+千分比 的属性约定写入
+local function entry(cell_height, attrs)
+    local n = D.new(constants.GLYPH)
+    D.setfield(n, "char", 0x4E00)
+    for attr, permille in pairs(attrs or {}) do
+        D.set_attribute(n, attr, 1 + permille)
+    end
+    return { node = n, cell_height = cell_height }
+end
+
+test_utils.run_test("build_column_gaps: 纯汉字列的 gap 结构与字距类别", function()
+    local entries = { entry(EM), entry(EM), entry(EM) }
+    local col = layout_grid._internal.build_column_gaps(entries, EM)
+    -- head_1 + (tail,inter,head)×2 + tail_3 = 3N−1
+    test_utils.assert_eq(#col.gaps, 3 * 3 - 1)
+    -- 没有标点空白 → 刚性总量就是字幅总和
+    test_utils.assert_eq(col.rigid_total, 3 * EM)
+    -- 字距是 0.1em、可压到 0、参与兜底均分，类别是「最后手段」
+    local g = col.gaps[col.inter_idx[1]]
+    test_utils.assert_eq(g.width, math.floor(EM * 0.1))
+    test_utils.assert_eq(g.min, 0)
+    test_utils.assert_eq(g.shrink_class, "inter_char")
+    test_utils.assert_true(g.fallback)
+end)
+
+test_utils.run_test("build_column_gaps: 标点的弹性空白升格为 gap，刚性只剩墨迹", function()
+    -- 逗号：潜在空白 0.5em 全在末端，相邻规则只强制收回 0.2em
+    -- → 字幅 0.8em，其中 0.3em 是可继续收回的弹性空白，0.5em 刚性
+    local e = entry(math.floor(EM * 0.8), {
+        [constants.ATTR_PUNCT_BLANK] = 500,
+        [constants.ATTR_PUNCT_BLANK_HEAD] = 0,
+        [constants.ATTR_PUNCT_SQUEEZE] = 200,
+        [constants.ATTR_PUNCT_SQUEEZE_HEAD] = 0,
+        [constants.ATTR_PUNCT_SHRINK_CLASS] = 5,  -- comma_group（SHRINK_ORDER 第 5）
+    })
+    local col = layout_grid._internal.build_column_gaps({ e, entry(EM) }, EM)
+    local tail = col.gaps[col.tail_idx[1]]
+    test_utils.assert_near(tail.width, EM * 0.3, EM * 0.002)
+    test_utils.assert_eq(tail.min, 0)
+    test_utils.assert_eq(tail.shrink_class, "comma_group")
+    -- 刚性 + 弹性 = 原字幅（升格不改变自然长度）
+    test_utils.assert_near(col.rigid[1] + tail.width + col.gaps[col.head_idx[1]].width,
+        math.floor(EM * 0.8), 2)
+end)
+
+test_utils.run_test("build_column_gaps: 刚性单元边界上的三个 gap 全部锁死", function()
+    -- clreq 符号分离禁则：两字幅标点等单元内部不得有任何伸缩，
+    -- 横排的教训是只清 stretch 不清 shrink 会把单元压扁
+    local second = entry(EM, { [constants.ATTR_RIGID_PREV] = 0 })
+    D.set_attribute(second.node, constants.ATTR_RIGID_PREV, 1)
+    local col = layout_grid._internal.build_column_gaps({ entry(EM), second }, EM)
+    local inter = col.gaps[col.inter_idx[1]]
+    test_utils.assert_eq(inter.min, inter.width)
+    test_utils.assert_eq(inter.max, inter.width)
+    test_utils.assert_nil(inter.shrink_class)
+    test_utils.assert_nil(inter.fallback)
+end)
+
+test_utils.run_test("build_column_gaps: 列末标点归入挤压第 1 级", function()
+    local e = entry(EM, {
+        [constants.ATTR_PUNCT_BLANK] = 500,
+        [constants.ATTR_PUNCT_BLANK_HEAD] = 0,
+        [constants.ATTR_PUNCT_SHRINK_CLASS] = 7,  -- fullstop_group（第 7）
+    })
+    local col = layout_grid._internal.build_column_gaps({ entry(EM), e }, EM)
+    -- clreq 挤压顺序第 1 步就是「位于行末的标点」，优先于它平时的类别
+    test_utils.assert_eq(col.gaps[col.tail_idx[2]].shrink_class, "line_end_punct")
+end)
+
 print("\nAll core/layout-grid-test tests passed!")

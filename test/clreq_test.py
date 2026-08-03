@@ -809,6 +809,30 @@ def run_vertical_assertions(cols):
             f"（列长 {[len(c.glyphs) for c in squeezed]}）",
             len(squeezed) >= 1)
 
+    # ---- ⑤ter 列首的开始夹注符号收回始端空白（clreq 行首标点处理）
+    #      「不得位于行末，恰好越出列末时被推到下一列列首；此时始端半字
+    #      空白整段收回，字面紧贴列首。量法：拿「列首为引号」那一列的
+    #      **第二个字**与「列首为汉字」的列首字比高度——引号只占半字幅时
+    #      两者相差约 0.6 字幅（0.5 字幅 + 一个字距），不收回则是 1.1。
+    OPEN_MARKS = "﹁「﹃『（〔【"
+    # 正文首字的列首基准（不缩进的续列最高）；引号列的首字会比它更高，
+    # 因为字面被上移了半字幅
+    hanzi_tops = [c.glyphs[0][1] for c in cols
+                  if c.glyphs and c.glyphs[0][0] not in OPEN_MARKS]
+    ref_top = max(hanzi_tops)
+    head_cols = [c for c in cols
+                 if len(c.glyphs) >= 2 and c.glyphs[0][0] in OPEN_MARKS
+                 and c.glyphs[0][1] > ref_top]      # 列首（比正文首字更高）
+    for c in head_cols:
+        drop = (ref_top - c.glyphs[1][1]) / c.glyphs[1][2]
+        r.check("行首夹注符号",
+                f"「{c.text[:6]}…」列首引号只占半字幅：次字下移 {drop:.3f} 字幅"
+                f"（收回为 0.6，未收回为 1.1）",
+                abs(drop - 0.6) < 0.05)
+    r.check("行首夹注符号",
+            f"相位扫描扫到 {len(head_cols)} 列以开始夹注符号起头（应 ≥ 1）",
+            len(head_cols) >= 1)
+
     # ---- ⑤bis 大陆式偏靠（回归守卫）：点号与中点类的 Tm 原点应显著
     #      偏向列的外侧（右）。字面分布改度量驱动时曾把锚点误取为字形
     #      bbox 中心（0.49），偏靠整个丢失、标点回归为居中——TW-Kai 的

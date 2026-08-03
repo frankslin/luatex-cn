@@ -26,7 +26,14 @@ local debug_mod = require('debug.luatex-cn-debug')
 local shared_punct = require('shared.luatex-cn-punct-table')
 local punct_squeeze = require('shared.luatex-cn-punct-squeeze')
 local punct_anchors = require('shared.luatex-cn-punct-anchors')
+local adjust = require('shared.luatex-cn-adjust')
+local kinsoku = require('shared.luatex-cn-kinsoku')
 local dbg = debug_mod.get_debugger('punct')
+
+-- clreq 挤压优先顺序的类别 → 序号（写进 ATTR_PUNCT_SHRINK_CLASS，
+-- layout 阶段再还原成类别名交给求解器；顺序表本身只有共享层持有）
+local SHRINK_CLASS_INDEX = {}
+for i, cls in ipairs(adjust.SHRINK_ORDER) do SHRINK_CLASS_INDEX[cls] = i end
 
 -- ============================================================================
 -- Font ink-center cache for punctuation auto-centering
@@ -545,6 +552,70 @@ local function annotate_context_squeeze(seq, ctx)
                 1 + math.floor(plan.total * 1000 + 0.5))
             D.set_attribute(item.node, constants.ATTR_PUNCT_SQUEEZE_HEAD,
                 1 + math.floor(plan.head * 1000 + 0.5))
+            -- 潜在空白与挤压类别：相邻规则强制收回的只是其中一部分，余量留给
+            -- flush_buffer 的求解器按 clreq 优先顺序处置（P2 接线）。
+            local blank_head, blank_tail = punct_squeeze.blanks(item.char, opts)
+            local blank_total = blank_head + blank_tail
+            if blank_total > 0 then
+                D.set_attribute(item.node, constants.ATTR_PUNCT_BLANK,
+                    1 + math.floor(blank_total * 1000 + 0.5))
+                D.set_attribute(item.node, constants.ATTR_PUNCT_BLANK_HEAD,
+                    1 + math.floor(blank_head * 1000 + 0.5))
+                local cls = shared_punct.shrink_class_of(item.char, opts.style,
+                    "vertical")
+                local cls_idx = cls and SHRINK_CLASS_INDEX[cls]
+                if cls_idx then
+                    D.set_attribute(item.node,
+                        constants.ATTR_PUNCT_SHRINK_CLASS, 1 + cls_idx)
+                end
+                -- 落在列首 / 列末时的额外收回量（设计 §2.3）：断列结果这里还
+                -- 不知道，先把两种情形各算一遍，差额留给 flush_buffer 取用。
+                local at_start = punct_squeeze.plan(prev_c, item.char, next_c,
+                    { at_line_start = true }, opts)
+                local at_end = punct_squeeze.plan(prev_c, item.char, next_c,
+                    { at_line_end = true }, opts)
+                local d_start = at_start.head - plan.head
+                local d_end = at_end.tail - plan.tail
+                if d_start > 0 then
+                    D.set_attribute(item.node, constants.ATTR_PUNCT_TRIM_START,
+                        1 + math.floor(d_start * 1000 + 0.5))
+                end
+                if d_end > 0 then
+                    D.set_attribute(item.node, constants.ATTR_PUNCT_TRIM_END,
+                        1 + math.floor(d_end * 1000 + 0.5))
+                end
+            end
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- 刚性单元（clreq 符号分离禁则）的原因标签：这些边界不只是「不能断」，
+-- 而是「内部不能有任何伸缩」——两字幅标点、数字串、数字+单位、正负号+数字、
+-- 货币符号+数字、西文单词。行首/行尾禁则不在此列（「一。」不能断开，但
+-- 「一」与「。」之间的间距照常参与调整）。与横排 hori-spacing 的
+-- RIGID_REASONS 同一份口径。
+local RIGID_REASONS = {
+    unbreakable_pair = true,
+    digit_run = true,
+    digit_suffix = true,
+    sign_prefix = true,
+    currency = true,
+    western_word = true,
+}
+
+--- 标注刚性单元边界：字符 i 与 i−1 同属一个不可分单元时，在 i 上打标记。
+-- layout 阶段据此把该边界上的字距与两侧标点空白全部锁死（横排的教训：
+-- 叠加符号自带可挤空白，只清 stretch 不清 shrink 会让两字幅单元被压扁）。
+-- @param seq (table) {{node, char, punct}, ...}
+-- @return (number) 标注的边界数
+local function annotate_rigid_units(seq)
+    local count = 0
+    for i = 2, #seq do
+        local _, reason = kinsoku.no_break_between(seq[i - 1].char, seq[i].char)
+        if reason and RIGID_REASONS[reason] then
+            D.set_attribute(seq[i].node, constants.ATTR_RIGID_PREV, 1)
             count = count + 1
         end
     end
@@ -632,11 +703,12 @@ function punct.flatten(head, params, ctx)
     end
 
     local count_context = annotate_context_squeeze(seq, ctx)
+    local count_rigid = annotate_rigid_units(seq)
 
     if count_classified > 0 or count_replaced > 0 then
         dbg.log(string.format(
-            "punct flatten: classified=%d, quotes_replaced=%d, context_squeeze=%d",
-            count_classified, count_replaced, count_context))
+            "punct flatten: classified=%d, quotes_replaced=%d, context_squeeze=%d, rigid=%d",
+            count_classified, count_replaced, count_context, count_rigid))
     end
 
     return D.tonode(d_head)

@@ -197,6 +197,7 @@ adjust.SHRINK_ORDER = {
   "comma_group",     -- 5 逗号/顿号/分号（min 半字）
   "cjk_western",     -- 6 中西间距（min 1/8 em）
   "fullstop_group",  -- 7 句号/问号/叹号（min 半字）
+  "inter_char",      -- 8 字距本身——**不在 clreq 列举的七步之内**
 }
 adjust.STRETCH_ORDER = { "western_word", "cjk_western" }
 -- 拉伸上限：西文词距/中西间距均至半字宽；之后兜底均分到 fallback 间隙
@@ -204,6 +205,10 @@ adjust.STRETCH_ORDER = { "western_word", "cjk_western" }
 
 括号内的 min/max 是 clreq 的规定值，**由后端换算进 gap 的 min/max**；
 adjust 只认字段，不查表——这保证它对任何长度单位与特殊风格都成立。
+
+第 8 项 `inter_char` 是本项目的扩展：clreq 假定行内密排、字距无可压缩，
+而本项目直排以 0.1 em 为基准字距（版式选择），所以它必须排在七步**之后**
+作为最后手段——绝不能先于标点空白被压缩。横排不使用本类。
 
 ### 2.3 语义
 
@@ -247,7 +252,8 @@ adjust 只认字段，不查表——这保证它对任何长度单位与特殊�
 | `forbid_line_end(char, level)` | bool | 同上 |
 | `no_break_between(prev, next, opts)` | bool, reason | 核心判定，见 3.2 |
 | `penalty_between(prev, next, opts)` | number | 横排用：`no_break` → 10000，否则 0 |
-| `check_wrap(last_char, next_char, opts)` | nil \| "start_violation" \| "end_violation" | 竖排用：列满时判定是否需要挤进/推出（挤/推的代价比较留在后端） |
+| `check_wrap(last_char, next_char, opts)` | nil \| "start_violation" \| "end_violation" | 竖排用：列满时判定禁则是否被违反 |
+| `resolve_overflow(cands)` | "squeeze" \| "stretch", detail | 违反后怎么办：对「挤进」「推出」两个候选各解一次 `adjust.solve`，按 clreq 优先顺序加权比较形变代价。见 3.4 |
 
 `opts = { level = "basic" }`（缺省 basic，clreq 最推荐级别）。
 `reason` 为字符串（"forbid_start" / "forbid_end" / "unbreakable_pair" /
@@ -270,6 +276,50 @@ adjust 只认字段，不查表——这保证它对任何长度单位与特殊�
 8. **西文单词**：letter+letter → 禁（连字符 `-` 之后允许断，即 prev 为 hyphen 时放行）。
 
 上下标/注释记号与被标记文字的分离禁则不在本函数（需节点属性，属后端职责）。
+
+### 3.4 挤进 / 推出的代价比较
+
+```
+cands = {
+  squeeze = { target = <gap 可用总量>, gaps = {...} },  -- 多收一个字的排布
+  stretch = { target = <gap 可用总量>, gaps = {...} },  -- 少一个字的排布
+}
+```
+
+`target` 由后端算：列（行）可用长度 − 该候选的刚性总量。返回
+`"squeeze"` 或 `"stretch"`，外加 `{squeeze_cost, stretch_cost, squeeze, stretch}`
+（后两者是 `adjust.solve` 的结果，可直接落盘）。
+
+代价模型是**词典序**，不是加权和。解完之后按类聚合形变剖面（每类记该类里
+被动用得最狠的那个 gap 动了多少；只有可动的 gap 参与，刚性 gap 不是调整
+手段），比较时**从最后手段（`inter_char` 字距）往前逐级比**，先分出胜负的
+那一级说了算；全等时选挤进（clreq：先挤进，后推出）。`deficit > 0`
+（全部触底仍装不下）判为不可行，直接出局。
+
+**与 clreq 字面的偏离（须在符合度矩阵中声明）**：clreq 说「最后没有挤压
+机会，再从前一行取最后一个字」，即只要挤得进就挤进；词典序求的是尽量少动
+最后手段。挤进可行但要把字距压得比推出拉得更狠时，两者分歧——本实现选
+推出（−52% 的字距比 +32% 的拉伸难看得多）。这是排版质量优先于规范字面的
+有意取舍。
+
+**容差**：`opts.tolerance`，与 gaps 同一单位，由后端按自己的量纲传入
+（竖排传 `grid_height × 0.001`）；缺省按输入规模自适应。**不可硬编码绝对
+容差**——本模块与 `adjust.lua` 同样「不假设单位」，1 em = 655360 sp，写死
+的常数在 sp 量纲下会让「全等 → 先挤进」这条兜底失效，决策由浮点舍入决定。
+
+**为什么不能加权求和**：clreq 的优先顺序是「第 1 级用尽才轮到第 2 级」的
+词典序。把逗号空白收满 0.5 em 在规范语义里是零代价的正常操作，而线性权重
+会把它算成「形变 0.5 的昂贵操作」——量级差远大于权重差（5 vs 8），于是
+**多给一个规范允许的挤压手段，反而让该候选更贵**。实测（4000 组随机列）
+会翻转约 13% 的决策，方向一律是把「字距零形变」的挤进方案判成不如
+「字距全动」的推出方案。类内取最大值而非总和：类内是同时、同等量处理
+（clreq 原文），最大值即「这一类被动用的程度」，且与 gap 个数无关——
+两个候选 gap 数不同也可比。
+
+**为什么必须在共享层**：后端若自己按「新字距 − 基准字距」比价，就看不见
+标点字面空白——收一个逗号的空白（clreq 挤压第 5 级）远比拉开字距便宜，
+土成本函数会把求解器本来吃得下的行/列推出去。横排没有这个问题只是因为
+它把决策交给了 TeX 断行器。
 
 ### 3.3 长串两字宽标点的对边界
 

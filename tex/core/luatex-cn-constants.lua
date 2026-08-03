@@ -86,6 +86,37 @@ constants.ATTR_PUNCT_SQUEEZE = luatexbase.attributes.cnverticalpunctsqueeze or
 constants.ATTR_PUNCT_SQUEEZE_HEAD = luatexbase.attributes.cnverticalpunctsqhead or
     luatexbase.new_attribute("cnverticalpunctsqhead")
 
+-- 该标点**总共**携带多少字面空白（潜在可收回量，1 + 千分比），与
+-- ATTR_PUNCT_SQUEEZE 的区别是后者只记「相邻规则已经强制收回」的那部分。
+-- 两者之差就是弹性余量：列排不下时，flush_buffer 的求解器可以按 clreq
+-- 挤压优先顺序继续收回它，而不必先去压字距。
+constants.ATTR_PUNCT_BLANK = luatexbase.attributes.cnverticalpunctblank or
+    luatexbase.new_attribute("cnverticalpunctblank")
+
+-- 其中始端那部分（1 + 千分比），语义同 ATTR_PUNCT_SQUEEZE_HEAD。
+constants.ATTR_PUNCT_BLANK_HEAD = luatexbase.attributes.cnverticalpunctblankhead or
+    luatexbase.new_attribute("cnverticalpunctblankhead")
+
+-- 该空白在 clreq 挤压优先顺序里的类别：1 + shared/adjust.lua SHRINK_ORDER 的
+-- 序号。layout 阶段据此给 gap 填 shrink_class，规则表仍只有共享层持有。
+constants.ATTR_PUNCT_SHRINK_CLASS = luatexbase.attributes.cnverticalpunctshrinkcls or
+    luatexbase.new_attribute("cnverticalpunctshrinkcls")
+
+-- 该标点若落在列首 / 列末，还能**额外**收回多少空白（1 + 千分比）。
+-- clreq 的行首开始夹注符号、行末点号处理是硬性规定而非弹性，但「在不在
+-- 列首列末」要等断列结果才知道，所以 flatten 阶段先把两种情形的增量算好，
+-- flush_buffer 定下断列后按位置取用（设计 §2.3）。
+constants.ATTR_PUNCT_TRIM_START = luatexbase.attributes.cnverticalpuncttrimstart or
+    luatexbase.new_attribute("cnverticalpuncttrimstart")
+constants.ATTR_PUNCT_TRIM_END = luatexbase.attributes.cnverticalpuncttrimend or
+    luatexbase.new_attribute("cnverticalpuncttrimend")
+
+-- 该字与**前一个字**同属一个刚性单元（clreq 符号分离禁则：两字幅标点、
+-- 数字串、数字+单位、符号+数字、西文单词）。1 = 是。layout 阶段据此把该
+-- 边界上的字距与两侧标点空白全部锁死（不可伸、不可缩）。
+constants.ATTR_RIGID_PREV = luatexbase.attributes.cnverticalrigidprev or
+    luatexbase.new_attribute("cnverticalrigidprev")
+
 -- Vertical rotation attribute (for glyphs that need 90° clockwise rotation)
 -- Used when font lacks vertical glyph forms (e.g., ellipsis, em dash)
 -- Value: 1 = needs rotation, 0 or unset = normal
