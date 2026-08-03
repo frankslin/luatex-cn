@@ -339,6 +339,32 @@ def resolve_files_in_suite(file_args, tex_dir):
     return tex_files
 
 
+def split_files_by_suite(file_args, suites_to_run):
+    """把文件参数按所属套件分组，返回 {suite_name: [file_arg, ...]}。
+
+    直接路径按包含它的套件 tex/ 目录归组（否则 save 会把别的套件的
+    基线错存进 basic/baseline/）；裸名字无从判断归属，保留给选中的
+    套件按原逻辑搜索。"""
+    groups = {}
+    for f in file_args:
+        p = Path(f)
+        if p.exists() and p.is_file():
+            rp = p.resolve()
+            owner = None
+            for name, sdir in SUITES.items():
+                if (sdir / "tex").resolve() in rp.parents:
+                    owner = name
+                    break
+            if owner is None:
+                print(f"Warning: {f} 不在任何套件的 tex/ 目录内，跳过")
+                continue
+            groups.setdefault(owner, []).append(f)
+        else:
+            for name in suites_to_run:
+                groups.setdefault(name, []).append(f)
+    return groups
+
+
 def run_suite(suite_name, suite_dir, mode, file_args, jobs):
     """Run regression tests for a single suite. Returns True if all passed."""
     tex_dir, pdf_dir, baseline_dir, current_dir, diff_dir = get_suite_dirs(suite_dir)
@@ -442,12 +468,21 @@ def main():
 
     all_passed = True
     print(f"Running with {args.jobs} parallel jobs...")
-    print(f"Suites: {', '.join(suites_to_run)}\n")
 
-    for suite_name in suites_to_run:
+    if args.files:
+        # 显式传文件时按文件实际所属套件路由（与套件开关无关），
+        # 避免 save 把 complete/past_issue 的基线存进 basic/baseline/
+        groups = split_files_by_suite(args.files, suites_to_run)
+        run_plan = [(name, groups[name]) for name in SUITES if name in groups]
+    else:
+        run_plan = [(name, None) for name in suites_to_run]
+
+    print(f"Suites: {', '.join(name for name, _ in run_plan)}\n")
+
+    for suite_name, files in run_plan:
         suite_dir = SUITES[suite_name]
         print(f"--- Suite: {suite_name} ---")
-        passed = run_suite(suite_name, suite_dir, args.command, args.files, args.jobs)
+        passed = run_suite(suite_name, suite_dir, args.command, files, args.jobs)
         if not passed:
             all_passed = False
 
