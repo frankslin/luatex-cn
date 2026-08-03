@@ -1555,7 +1555,12 @@ local function calculate_buffer_height(col_buffer)
         local ch = entry.cell_height or 0
         total_height = total_height + ch
         if i < #col_buffer then
-            total_height = total_height + math.floor(ch * GAP_RATIO)
+            -- 两字幅标点单元（—— …… ？！）内部无字距，与 inter_gap_desc 同口径；
+            -- 估算和求解器不一致会让列尾早换一列
+            local nxt = col_buffer[i + 1]
+            if D.get_attribute(nxt.node, constants.ATTR_RIGID_PREV) ~= 2 then
+                total_height = total_height + math.floor(ch * GAP_RATIO)
+            end
         end
     end
     return total_height
@@ -1608,7 +1613,9 @@ end
 -- 只有正文字距可调，且它在 clreq 挤压顺序里排在所有标点空白之后
 -- （"inter_char"，见 shared/adjust.lua 的注释），拉伸时作为兜底均分对象。
 -- @param locked (boolean) 该边界属于刚性单元内部
-local function inter_gap_desc(entries, i, grid_height, locked)
+-- @param two_em (boolean) 该边界在两字幅标点单元（—— …… ？！）内部：
+--   clreq 规定整个单元占两个汉字宽度，中间不能再夹字距，故归零
+local function inter_gap_desc(entries, i, grid_height, locked, two_em)
     local e = entries[i]
     local nxt = entries[i + 1]
     local ch = e.cell_height or grid_height
@@ -1636,6 +1643,9 @@ local function inter_gap_desc(entries, i, grid_height, locked)
         w = math.floor(ch * GAP_RATIO)
     else
         local base = math.floor(ch * GAP_RATIO)
+        if two_em then
+            return { width = 0, min = 0, max = 0 }
+        end
         if locked then
             return { width = base, min = base, max = base }
         end
@@ -1667,7 +1677,7 @@ end
 local function build_column_gaps(entries, grid_height)
     local N = #entries
     local el_head, el_tail, rigid = {}, {}, {}
-    local cls, rigid_prev = {}, {}
+    local cls, rigid_prev, two_em_prev = {}, {}, {}
     local blank_head_sp, blank_total_sp = {}, {}
     local rigid_total = 0
 
@@ -1706,7 +1716,9 @@ local function build_column_gaps(entries, grid_height)
 
         local ci = D.get_attribute(nd, constants.ATTR_PUNCT_SHRINK_CLASS)
         cls[i] = (ci and ci > 1) and adjust.SHRINK_ORDER[ci - 1] or nil
-        rigid_prev[i] = D.get_attribute(nd, constants.ATTR_RIGID_PREV) == 1
+        local rp = D.get_attribute(nd, constants.ATTR_RIGID_PREV)
+        rigid_prev[i] = (rp or 0) >= 1
+        two_em_prev[i] = (rp == 2)
     end
 
     local gaps = {}
@@ -1727,7 +1739,7 @@ local function build_column_gaps(entries, grid_height)
             local locked = rigid_prev[i]
             tail_idx[i - 1] = push(blank_gap(el_tail[i - 1], cls[i - 1], locked))
             inter_idx[i - 1] = push(inter_gap_desc(entries, i - 1, grid_height,
-                locked))
+                locked, two_em_prev[i]))
         end
         head_idx[i] = push(blank_gap(el_head[i], cls[i],
             i > 1 and rigid_prev[i] or false))
@@ -1815,6 +1827,13 @@ local function check_natural_kinsoku(t, ctx, col_buffer, grid_height)
     local last = col_buffer[#col_buffer]
     local last_code = D.get_attribute(last.node, constants.ATTR_PUNCT_TYPE)
     if last_code and last_code > 0 and is_line_end_forbidden_code(last_code) then
+        return calculate_kinsoku_action(col_buffer, t, ctx, grid_height)
+    end
+
+    -- Case 3: t 与列尾字同属两字幅标点单元（—— …… ？！），断在中间就把
+    -- 一个占两字幅的符号劈成两半（clreq 符号分离禁则）。挤进还是推出交给
+    -- 同一套比价——推出时只推一个字，正好是本单元的前一半。
+    if D.get_attribute(t, constants.ATTR_RIGID_PREV) == 2 then
         return calculate_kinsoku_action(col_buffer, t, ctx, grid_height)
     end
 
@@ -1908,7 +1927,9 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
                 local buffer_height = calculate_buffer_height(col_buffer)
                 local next_y = col_start_y + buffer_height + cell_h
                 -- Add 0.1em gap for the character we're about to add
-                if #col_buffer > 0 then
+                -- （两字幅标点单元内部无字距，同 calculate_buffer_height）
+                if #col_buffer > 0
+                        and D.get_attribute(t, constants.ATTR_RIGID_PREV) ~= 2 then
                     local prev_ch = col_buffer[#col_buffer].cell_height or 0
                     next_y = next_y + math.floor(prev_ch * GAP_RATIO)
                 end

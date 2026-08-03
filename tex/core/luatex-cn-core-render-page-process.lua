@@ -172,6 +172,29 @@ local function handle_glyph_node(curr, p_head, pos, params, ctx)
     -- Check if glyph needs vertical rotation (font lacks vertical form)
     local needs_rotate = D.get_attribute(curr, constants.ATTR_VERT_ROTATE) == 1
 
+    -- 连排破折号：把墨迹沿列方向拉满整个字幅。字体给 ︱ 的墨迹通常够不到
+    -- 字幅两端（TW-Kai 约 0.9 em），连排时两段之间就露出断口；layout 已把
+    -- 单元内部字距归零，字幅之间严丝合缝，缺的只是这一段墨迹。只缩放列方向，
+    -- 横向不动，笔画粗细仍是字体自己的。
+    -- @return (number|nil) 缩放系数；不需要拉伸时为 nil
+    local dash_scale = nil
+    if D.get_attribute(curr, constants.ATTR_DASH_RUN) == 1 then
+        local fsize = fdata and fdata.size
+        local target = pos.cell_height
+        if fsize and fsize > 0 and type(target) == "number" and target > 0 then
+            local a, b
+            if needs_rotate then
+                a, b = helpers.glyph_ink_hspan(curr)   -- 旋转后横向跨度即列方向
+            else
+                b, a = helpers.glyph_ink_span(curr)    -- top, bottom → a=bottom
+            end
+            local ink = (b - a) * fsize
+            if ink > 0 and target > ink then
+                dash_scale = target / ink
+            end
+        end
+    end
+
     if needs_rotate then
         -- Rotate 90° CW and translate glyph to its grid position.
         -- The glyph is at text-space origin (xoffset=yoffset=0).
@@ -190,14 +213,40 @@ local function handle_glyph_node(curr, p_head, pos, params, ctx)
         D.setfield(curr, "xoffset", 0)
         D.setfield(curr, "yoffset", 0)
 
+        -- 连排破折号的旋转回退：沿字形自身 x 轴（旋转后即列方向）拉伸墨迹。
+        -- 矩阵 [0 −s 1 0 e f] 把 (x,y) 映到 (y+e, −s·x+f)，笔画粗细（字形 y
+        -- 方向）不受影响；绕墨迹中心 cx 缩放，位置与不拉伸时一致。
+        local s = 1
+        local cx = gc_x
+        if dash_scale then
+            local ix1, ix2 = helpers.glyph_ink_hspan(curr)
+            s = dash_scale
+            cx = (ix1 + ix2) / 2 * ((fdata and fdata.size) or 0) * sp2bp
+        end
+
         local e = fx + gc_x - gc_y
-        local f = fy + gc_x + gc_y
+        local f = fy + gc_y + s * cx
         local literal_str = string.format(
-            "q 0 -1 1 0 %.4f %.4f cm", e, f
+            "q 0 %.4f 1 0 %.4f %.4f cm", -s, e, f
         )
         local n_start = utils.create_pdf_literal(literal_str)
         local n_end = utils.create_pdf_literal(utils.create_graphics_state_end())
 
+        p_head = D.insert_before(p_head, curr, n_start)
+        D.insert_after(p_head, curr, n_end)
+    elseif dash_scale then
+        -- 竖排形 ︱：只沿 y 拉伸，绕墨迹中心缩放 —— y' = s·y + cy·(1−s)，
+        -- 字面中心不动（标点本就按墨迹居中放进格里）
+        local top, bot = helpers.glyph_ink_span(curr)
+        local cy = (top + bot) / 2 * ((fdata and fdata.size) or 0)
+        local sp2bp = utils.sp_to_bp
+        D.setfield(curr, "xoffset", 0)
+        D.setfield(curr, "yoffset", 0)
+        local literal_str = string.format("q 1 0 0 %.4f %.4f %.4f cm",
+            dash_scale, final_x * sp2bp,
+            (final_y + cy * (1 - dash_scale)) * sp2bp)
+        local n_start = utils.create_pdf_literal(literal_str)
+        local n_end = utils.create_pdf_literal(utils.create_graphics_state_end())
         p_head = D.insert_before(p_head, curr, n_start)
         D.insert_after(p_head, curr, n_end)
     elseif v_scale == 1.0 and h_scale == 1.0 then

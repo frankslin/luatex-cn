@@ -361,8 +361,62 @@ function punct.make_kinsoku_hook(punct_ctx)
         -- Column is full (ctx.cur_row >= effective_limit)
         -- The character at col_buffer[#col_buffer] was just placed at the last row
 
-        -- Strategy 1: Check if next visible glyph is line-start-forbidden
+        --- 把列尾的 n 个字连同换列一起挪到下一列
+        local function pull_tail(n)
+            local pulled = {}
+            for _ = 1, n do
+                local e = table.remove(col_buffer)
+                if not e then break end
+                table.insert(pulled, 1, e)
+            end
+            if #pulled == 0 then return false end
+            flush_buffer()
+            wrap_to_next_column(ctx, p_cols, interval, grid_height, indent, false, false)
+            -- Apply indent: wrap_to_next_column resets cur_row to 0 but
+            -- does not apply paragraph indentation for the new column
+            if indent and indent > 0 and ctx.cur_row < indent then
+                ctx.cur_row = indent
+                ctx.cur_column_indent = indent
+                ctx.cur_y_sp = ctx.cur_row * grid_height
+            end
+            for _, e in ipairs(pulled) do
+                e.page = ctx.cur_page
+                e.col = ctx.cur_col
+                e.relative_row = ctx.cur_y_sp / grid_height
+                e.y_sp = ctx.cur_y_sp
+                table.insert(col_buffer, e)
+                ctx.cur_row = ctx.cur_row + 1
+                ctx.cur_y_sp = ctx.cur_row * grid_height
+            end
+            ctx.page_has_content = true
+            return true
+        end
+
+        -- Strategy 0: 下一个字与列尾字同属两字幅标点单元（—— …… ？！）。
+        -- clreq 符号分离禁则：这类符号占两个汉字宽度，是一个整体，断在中间
+        -- 就把一个符号劈成了两半。把列尾这半（若是 ——— 这样的长串则是整
+        -- 个尾串）一起带到下一列。
         local next_glyph = find_next_glyph(t)
+        if next_glyph and #col_buffer > 0
+                and D.get_attribute(next_glyph, constants.ATTR_RIGID_PREV) == 2 then
+            -- 至少留一个字在本列，否则空列 → 死循环
+            local n = 0
+            while n < #col_buffer - 1 do
+                n = n + 1
+                local e = col_buffer[#col_buffer - n + 1]
+                if D.get_attribute(e.node, constants.ATTR_RIGID_PREV) ~= 2 then
+                    break
+                end
+            end
+            if n > 0 and pull_tail(n) then
+                dbg.log(string.format(
+                    "kinsoku: 两字幅单元不拆开，尾部 %d 字随下一字移入新列 [p:%d c:%d]",
+                    n, ctx.cur_page, ctx.cur_col))
+                return
+            end
+        end
+
+        -- Strategy 1: Check if next visible glyph is line-start-forbidden
         if next_glyph then
             local next_char = D.getfield(next_glyph, "char")
             local next_ptype = punct.classify(next_char)
@@ -370,26 +424,7 @@ function punct.make_kinsoku_hook(punct_ctx)
             if next_ptype and punct.is_line_start_forbidden(next_ptype) then
                 -- Next character cannot start a new column.
                 -- Pull the last character from col_buffer and move both to new column.
-                local pulled = table.remove(col_buffer)
-                if pulled then
-                    flush_buffer()
-                    wrap_to_next_column(ctx, p_cols, interval, grid_height, indent, false, false)
-                    -- Apply indent: wrap_to_next_column resets cur_row to 0 but
-                    -- does not apply paragraph indentation for the new column
-                    if indent and indent > 0 and ctx.cur_row < indent then
-                        ctx.cur_row = indent
-                        ctx.cur_column_indent = indent
-                        ctx.cur_y_sp = ctx.cur_row * grid_height
-                    end
-                    pulled.page = ctx.cur_page
-                    pulled.col = ctx.cur_col
-                    pulled.relative_row = ctx.cur_y_sp / grid_height
-                    pulled.y_sp = ctx.cur_y_sp
-                    table.insert(col_buffer, pulled)
-                    ctx.cur_row = ctx.cur_row + 1
-                    ctx.cur_y_sp = ctx.cur_row * grid_height
-                    ctx.page_has_content = true
-
+                if pull_tail(1) then
                     dbg.log(string.format(
                         "kinsoku: pulled char to new col (next=0x%04X type=%s) [p:%d c:%d]",
                         next_char, next_ptype, ctx.cur_page, ctx.cur_col))
@@ -406,25 +441,7 @@ function punct.make_kinsoku_hook(punct_ctx)
 
             if last_ptype and punct.is_line_end_forbidden(last_ptype) then
                 -- Current character (opening bracket) cannot end a column.
-                local pulled = table.remove(col_buffer)
-                flush_buffer()
-                wrap_to_next_column(ctx, p_cols, interval, grid_height, indent, false, false)
-                -- Apply indent: wrap_to_next_column resets cur_row to 0 but
-                -- does not apply paragraph indentation for the new column
-                if indent and indent > 0 and ctx.cur_row < indent then
-                    ctx.cur_row = indent
-                    ctx.cur_column_indent = indent
-                    ctx.cur_y_sp = ctx.cur_row * grid_height
-                end
-                pulled.page = ctx.cur_page
-                pulled.col = ctx.cur_col
-                pulled.relative_row = ctx.cur_y_sp / grid_height
-                pulled.y_sp = ctx.cur_y_sp
-                table.insert(col_buffer, pulled)
-                ctx.cur_row = ctx.cur_row + 1
-                ctx.cur_y_sp = ctx.cur_row * grid_height
-                ctx.page_has_content = true
-
+                pull_tail(1)
                 dbg.log(string.format(
                     "kinsoku: moved line-end-forbidden char to new col (0x%04X type=%s) [p:%d c:%d]",
                     last_char, last_ptype, ctx.cur_page, ctx.cur_col))
@@ -608,14 +625,30 @@ local RIGID_REASONS = {
 --- 标注刚性单元边界：字符 i 与 i−1 同属一个不可分单元时，在 i 上打标记。
 -- layout 阶段据此把该边界上的字距与两侧标点空白全部锁死（横排的教训：
 -- 叠加符号自带可挤空白，只清 stretch 不清 shrink 会让两字幅单元被压扁）。
+--
+-- 属性取值区分两档，因为竖排对两者的处置不同：
+--   1 = 一般刚性单元（数字串、西文词……）：锁死既有字距即可
+--   2 = 两字幅标点单元（—— …… ？！）：字距还要**归零**。clreq 说它「占两个
+--       汉字宽度」，中间夹 0.1em 竖排字距就成了 2.1em，破折号还会现出断口。
+--       横排 hori-spacing 的 CJK 间边界本来就是 width=0，这里对齐同一口径。
 -- @param seq (table) {{node, char, punct}, ...}
 -- @return (number) 标注的边界数
 local function annotate_rigid_units(seq)
     local count = 0
     for i = 2, #seq do
-        local _, reason = kinsoku.no_break_between(seq[i - 1].char, seq[i].char)
+        local prev_c, cur_c = seq[i - 1].char, seq[i].char
+        local _, reason = kinsoku.no_break_between(prev_c, cur_c)
         if reason and RIGID_REASONS[reason] then
-            D.set_attribute(seq[i].node, constants.ATTR_RIGID_PREV, 1)
+            local two_em = shared_punct.is_unbreakable_pair(prev_c, cur_c)
+            D.set_attribute(seq[i].node, constants.ATTR_RIGID_PREV,
+                two_em and 2 or 1)
+            -- 连排破折号的两端都要标记：render 把每一段的墨迹拉满字幅，
+            -- 串起来才是一条不断的线（省略号不在此列——…… 的墨迹是圆点，
+            -- 拉伸只会把点扯成椭圆）
+            if two_em and shared_punct.class_of(cur_c) == "dash" then
+                D.set_attribute(seq[i - 1].node, constants.ATTR_DASH_RUN, 1)
+                D.set_attribute(seq[i].node, constants.ATTR_DASH_RUN, 1)
+            end
             count = count + 1
         end
     end
@@ -1044,6 +1077,7 @@ end
 -- Export internal functions for unit testing
 punct._internal = {
     parse_tounicode = parse_tounicode,
+    annotate_rigid_units = annotate_rigid_units,
     resolve_original_codepoint = resolve_original_codepoint,
     get_ink_center_ratio = get_ink_center_ratio,
     INK_CENTER_CHARS = INK_CENTER_CHARS,
