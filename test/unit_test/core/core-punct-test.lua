@@ -699,8 +699,38 @@ test_utils.run_test("anchors: 按自身字号缩放（夹注小字）", function
 end)
 
 -- ============================================================================
--- 破折号：连排标注（issue #119）
+-- 破折号：合字拆解与连排标注（issue #119）
 -- ============================================================================
+
+test_utils.run_test("dash_ligature_count: ⸺ / ⸻ 有正式码位", function()
+    -- 思源宋体的 ccmp 把 —— 合成 U+2E3A（实测 width ≈ 1.7 em），
+    -- 一字一格的竖排网格里必须拆回两个 em dash
+    test_utils.assert_eq(punct.dash_ligature_count(0, 0x2E3A), 2)
+    test_utils.assert_eq(punct.dash_ligature_count(0, 0x2E3B), 3)
+end)
+
+test_utils.run_test("dash_ligature_count: 普通字符不是合字", function()
+    test_utils.assert_nil(punct.dash_ligature_count(0, 0x2014))  -- — 本身
+    test_utils.assert_nil(punct.dash_ligature_count(0, 0x2026))  -- …
+    test_utils.assert_nil(punct.dash_ligature_count(0, 0x4E00))  -- 一
+end)
+
+test_utils.run_test("dash_ligature_count: 无码位合字靠 tounicode 识别", function()
+    local orig_getfont = font.getfont
+    font.getfont = function()
+        return { characters = {
+            [0xF1000] = { tounicode = "20142014" },   -- —— 合字
+            [0xF1001] = { tounicode = "201520152015" }, -- ─── 合字
+            [0xF1002] = { tounicode = "20142026" },   -- 破折号+省略号：不是
+            [0xF1003] = { tounicode = "2014" },       -- 单个：不是合字
+        } }
+    end
+    test_utils.assert_eq(punct.dash_ligature_count(1, 0xF1000), 2)
+    test_utils.assert_eq(punct.dash_ligature_count(1, 0xF1001), 3)
+    test_utils.assert_nil(punct.dash_ligature_count(1, 0xF1002))
+    test_utils.assert_nil(punct.dash_ligature_count(1, 0xF1003))
+    font.getfont = orig_getfont
+end)
 
 test_utils.run_test("annotate_rigid_units: 两字幅单元标 2，一般刚性单元标 1", function()
     local constants = require("core.luatex-cn-constants")

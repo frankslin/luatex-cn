@@ -283,6 +283,42 @@ function punct.classify(char_code)
     return LEGACY_CLASS[char_code]
 end
 
+--- 识别破折号合字，返回它代表几个 em dash。
+--
+-- 带 ccmp 的字体（思源宋体 / Noto CJK 等）在 shaping 阶段就把 —— 合成一个
+-- 字形，早于 flatten。合字只有横排形（无 ︱），宽度约 1.7 em，塞进一字一格
+-- 的竖排网格里就成了「两个字只占一格的横杠」。做法是把它拆回 N 个 em dash，
+-- 每个各自走标准流程（一格一个、竖排形/旋转、连排规则）。
+-- 两种形态：
+--   * U+2E3A（⸺ 两字破折号）/ U+2E3B（⸻ 三字）：思源走这一路，有正式码位
+--   * 无码位的合字：luaotfload 给它派 PUA 码位，靠 tounicode 是 2–3 个
+--     破折号码位连排来识别
+-- @param fid (number) Font ID
+-- @param char (number) Current char code
+-- @return (number|nil) 组成它的破折号个数（2 或 3），不是合字则为 nil
+function punct.dash_ligature_count(fid, char)
+    if char == 0x2E3A then return 2 end
+    if char == 0x2E3B then return 3 end
+    if (char >= 0xE000 and char <= 0xF8FF)
+        or (char >= 0xF0000 and char <= 0xFFFFF)
+        or char >= 0x100000 then
+        local fdata = font.getfont(fid)
+        local ch = fdata and fdata.characters and fdata.characters[char]
+        local tu = ch and ch.tounicode
+        if type(tu) == "string" and (#tu == 8 or #tu == 12) then
+            local n = 0
+            for i = 1, #tu, 4 do
+                local cp = tonumber(tu:sub(i, i + 3), 16)
+                -- U+2015 横杠：部分字体的破折号合字以它为构件
+                if cp ~= 0x2014 and cp ~= 0x2015 then return nil end
+                n = n + 1
+            end
+            return n
+        end
+    end
+    return nil
+end
+
 --- Check if a punctuation type is forbidden at line start (column top)
 -- @param ptype (string) Punctuation type
 -- @return (boolean)
@@ -681,6 +717,23 @@ function punct.flatten(head, params, ctx)
             if not (dec_id and dec_id > 0) then
                 local char = D.getfield(t, "char")
                 local logical_char = char
+
+                -- 0. 拆解破折号合字（⸺/⸻ 或 ccmp 派生的 PUA 字形），还原成
+                -- N 个 em dash，各自走下面的标准流程
+                local n_dash = punct.dash_ligature_count(D.getfont(t), char)
+                if n_dash then
+                    D.setfield(t, "char", 0x2014)
+                    char = 0x2014
+                    logical_char = 0x2014
+                    for _ = 2, n_dash do
+                        D.insert_after(d_head, t, D.copy(t))
+                    end
+                    -- 复制品排在 t 之后，下一轮循环依次处理
+                    next_node = D.getnext(t)
+                    count_replaced = count_replaced + 1
+                    dbg.log(string.format(
+                        "punct: 破折号合字拆解为 %d 个 em dash", n_dash))
+                end
 
                 -- 1. Vertical form replacement: brackets/quotes → vertical presentation forms
                 local vert_char = VERT_FORM_MAP[char]
