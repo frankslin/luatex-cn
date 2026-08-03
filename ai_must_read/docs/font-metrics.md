@@ -30,18 +30,19 @@
 
 配套 TW-Sung（正宋體）三文件同批次同授权，镜像 `Fonts_Sung/` 目录。
 
-### 0.2 CI / Linux 自动检测字体：Fandol
+### 0.2 Linux 自动检测字体（linux scheme）
 
-`font-autodetect.lua` 在 Linux 上的默认族；回归基线按它渲染。CI 通过
-TeX Live 包 `fandol` 安装（**版本随 CTAN 漂移，无法锁定**——TL 生态限制）。
+`font-autodetect.lua` 在 Linux 上的默认族：宋/黑 = Noto Serif/Sans CJK SC
+或思源系；楷 = 文鼎楷体（AR PL UKai / KaitiM，Arphic Public License）
+或霞鹜文楷（OFL 1.1）；仿宋 = Zhuque Fangsong（朱雀仿宋，OFL 1.1）。
+均按名字探测系统已装字体，缺失时落到 `common` 方案。
 
-| 项目 | 值 |
-|------|-----|
-| 文件 | FandolSong/Hei/Kai/Fang-Regular.otf（OTF/CFF，upem 1000） |
-| 版本 | Version 1.300（TL2026 实测；上游多年未更新，实际稳定） |
-| 覆盖 | 仅 **7,942/20,992（37.8%）** 基本区汉字（≈GB2312+），无 Ext-A/B。**古籍生僻字大量缺字** |
-| 授权 | OFL 1.1 |
-| 注意 | 曾因 CI 删 `ctex` 丢失其传递依赖 fandol 导致回归全挂（PR #107），装包列表现已显式声明 |
+> **历史（2026-08 移除 Fandol）**：此前 Linux 默认族与部分回归用例使用
+> Fandol 系列（CI 经 TeX Live 包 `fandol` 安装，版本无法钉定；覆盖仅
+> 37.8% 基本区汉字，无 Ext-A/B；其授权自称 GPLv3 + font exception——
+> **并非 OFL**，且来源存疑）。现回归用例统一改用 manifest 钉定的
+> Source Han Serif SC，CI 装包列表已不含 `fandol`。
+> 旧坑备考：曾因 CI 删 `ctex` 丢失其传递依赖 fandol 导致回归全挂（PR #107）。
 
 ### 0.3 macOS 本地开发字体（mac scheme）
 
@@ -73,9 +74,9 @@ Songti SC 实测：version 17.0d2e3，仅 7,103 个基本区汉字（33.8%）—
    不符即报错；`--verify` 只校验、`--all` 连同 optional（Ext-B/Plus）。
 4. **CI 与本地同源**：CI 用同一脚本 + actions/cache（key 含脚本哈希）。
 5. **已知不可复现点**（按影响排序）：
-   - Fandol 经 CTAN 安装无版本锁（实际多年未变）；
-   - mac 系统字体随 OS 漂移（仅影响本地预览与 3 个已知用例的像素差异）；
-   - 若需彻底消除：让所有回归用例显式指定 TW-Kai 并重存基线（待议）。
+   - mac 系统字体随 OS 漂移（仅影响本地预览）；
+   - ~~Fandol 经 CTAN 安装无版本锁~~ → 已消除（2026-08：回归用例全部
+     改用 manifest 钉定字体，不再依赖 TeX Live 装包字体）。
 
 ## 0.6 OFL / 开放来源替代方案评估（2026-07）
 
@@ -86,8 +87,8 @@ Songti SC 实测：version 17.0d2e3，仅 7,103 个基本区汉字（33.8%）—
 | 字体 | 授权 | 基本区 | Ext-A | Ext-B | 结论 |
 |------|------|--------|-------|-------|------|
 | **TW-Kai（现用）** | OFL 1.1（可选） | 99.7% | 100% | 100%（Ext-B 文件） | ✅ 保持现状最优 |
-| LXGW WenKai 霞鹜文楷 | OFL 1.1 | 通用规范 8,105 字为主 | 部分 | 无 | 风格佳但生僻字远不够 |
-| FandolKai | OFL 1.1 | 37.8% | 无 | 无 | 仅作 CI 缺省，不宜作基准 |
+| 文鼎PL简中楷 AR PL KaitiM GB | Arphic PL（1999 文鼎官方开源） | 32.2%（GB2312） | 无 | 无 | 传统印刷体楷书（manifest 已钉定，示例在用）；覆盖仅 GB2312 |
+| LXGW WenKai GB 霞鹜文楷 | OFL 1.1 | 100% | 100% | 无 | 手写钢笔风楷体；Ext-B 缺，古籍生僻字不够 |
 | Noto Serif CJK | OFL 1.1 | 100% | 100% | 少量 | 宋体非楷体；Ext-B 弱 |
 | KingHwa 京華老宋体 | 自定义声明 | 高（约 39k 字） | 有 | 部分 | 非标准授权，且为宋体 |
 | 花園明朝 A+B | 自由授权 | 100% | 100% | 100% | 明朝体风格，日系笔形，不合楷书需求 |

@@ -132,7 +132,7 @@ lualatex -interaction=nonstopmode issue_<number>.tex
 **判断标准**：
 | 条件 | 位置 |
 |------|------|
-| 使用通用字体（FandolSong/TW-Kai） | basic |
+| 使用通用字体（Source Han Serif SC/TW-Kai） | basic |
 | 使用特殊字体（KingHwa_OldSong + vert） | past_issue |
 | 核心功能的常见用法（句读、夹注、版心） | basic |
 | 特殊组合或边缘场景 | past_issue |

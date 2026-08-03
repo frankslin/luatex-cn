@@ -32,8 +32,9 @@ if not list(FONTS_DIR.glob("*.ttf")):
         f"WARNING: {FONTS_DIR} 中没有字体文件，编译可能因缺少 TW-Kai 失败。\n"
         "请先运行: sh scripts/download_test_fonts.sh"
     )
-# 精确比较：测试字体已全部钉定（TW-Kai 固定 commit 下载、FandolSong 随
-# TeX Live 分发），渲染跨环境逐字节可复现，任何像素差异都是真回归。
+# 精确比较：测试字体已全部钉定（manifest 固定 URL + SHA-256 下载，
+# 经 OSFONTDIR 提供，不依赖 TeX Live 装包），渲染跨环境逐字节可复现，
+# 任何像素差异都是真回归。
 # 曾经的容差（绝对 200px + 比例 0.2%，见 f9d06fd）是为吸收未钉定字体的
 # 跨平台渲染差异而设，钉定后反而会掩盖阈值以下的回归，已移除。
 

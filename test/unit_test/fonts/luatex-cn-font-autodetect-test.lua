@@ -71,12 +71,12 @@ test_utils.run_test("auto_select_scheme: mac scheme", function()
     fontdetect.detect_os = org_detect
 end)
 
-test_utils.run_test("auto_select_scheme: linux uses fandol", function()
+test_utils.run_test("auto_select_scheme: linux uses open-license linux scheme", function()
     local org_detect = fontdetect.detect_os
     fontdetect.detect_os = function() return "linux" end
 
     local scheme = fontdetect.auto_select_scheme()
-    test_utils.assert_eq(scheme.name, "fandol")
+    test_utils.assert_eq(scheme.name, "linux")
 
     fontdetect.detect_os = org_detect
 end)
@@ -129,7 +129,7 @@ test_utils.run_test("add_family_fallback: skips first font, registers rest", fun
     end
 
     local entries = fontdetect.add_family_fallback(
-        "famfbtest", "FandolSong, TW-Kai , TW-Kai-Ext-B")
+        "famfbtest", "Source Han Serif SC, TW-Kai , TW-Kai-Ext-B")
     test_utils.assert_eq(#entries, 2)
     test_utils.assert_eq(entries[1], "name:TW-Kai:mode=node;")
     test_utils.assert_eq(entries[2], "name:TW-Kai-Ext-B:mode=node;")
@@ -143,7 +143,7 @@ test_utils.run_test("add_family_fallback: single font registers nothing", functi
     _G.luaotfload = _G.luaotfload or {}
     local org = luaotfload.add_fallback
     luaotfload.add_fallback = function() called = true end
-    local entries = fontdetect.add_family_fallback("famfbsingle", "FandolSong")
+    local entries = fontdetect.add_family_fallback("famfbsingle", "Source Han Serif SC")
     test_utils.assert_eq(#entries, 0)
     test_utils.assert_eq(called, false)
     luaotfload.add_fallback = org
@@ -255,10 +255,10 @@ end)
 
 test_utils.run_test("prepare_family: single name registers no fallback", function()
     with_family_mocks({}, function(captured)
-        local resolved = fontdetect.prepare_family("famchain", "FandolSong")
+        local resolved = fontdetect.prepare_family("famchain", "Source Han Serif SC")
         test_utils.assert_eq(#resolved, 1)
         test_utils.assert_eq(captured.fb, nil)
-        test_utils.assert_eq(captured.macros.l__luatexcn_family_main_tl, "FandolSong")
+        test_utils.assert_eq(captured.macros.l__luatexcn_family_main_tl, "Source Han Serif SC")
         test_utils.assert_eq(captured.macros.l__luatexcn_family_fallback_tl, "")
     end)
 end)

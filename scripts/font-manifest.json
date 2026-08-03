@@ -190,6 +190,44 @@
         "example"
       ],
       "comment": "横排示例《论辩的魂灵》正文用字：台式居中标点、字面疏朗；标题保留 TW-Kai"
+    },
+    {
+      "name": "LXGWWenKaiGB",
+      "file": "LXGWWenKaiGB-Regular.ttf",
+      "family": "LXGW WenKai GB",
+      "font_version": "1.520",
+      "format": "ttf",
+      "size": 24903712,
+      "sha256": "252cde5857f7ce57ce76f7e2e1d2e91c1f912f1f4c13c7e4fb295b5fdf5923ed",
+      "license": "OFL-1.1",
+      "origin": "https://github.com/lxgw/LxgwWenkaiGB",
+      "urls": [
+        "https://github.com/lxgw/LxgwWenkaiGB/releases/download/v1.520/LXGWWenKaiGB-Regular.ttf"
+      ],
+      "coverage": "URO 100%、Ext-A 100%（国标字形，手写钢笔风楷体）",
+      "required_for": [
+        "optional"
+      ],
+      "comment": "备选楷体（钉定待用）；示例楷体现用文鼎PL简中楷"
+    },
+    {
+      "name": "ArphicKaitiMGB",
+      "file": "gkai00mp.ttf",
+      "family": "AR PL KaitiM GB",
+      "font_version": "2.11",
+      "format": "ttf",
+      "size": 4633128,
+      "sha256": "61519fb9bdda4a1a3aa02a12cbb76c2ef897ce879775d7ea2265d0a65fe54d16",
+      "license": "Arphic Public License",
+      "origin": "https://www.arphic.com.tw/ (1999 年文鼎科技官方开源，文鼎PL简中楷)",
+      "urls": [
+        "https://ftp.gnu.org/non-gnu/chinese-fonts-truetype/gkai00mp.ttf.gz"
+      ],
+      "coverage": "GB2312（URO 6,763），无 Ext-A/B；传统印刷体楷书",
+      "required_for": [
+        "example"
+      ],
+      "comment": "横排示例《论辩的魂灵》简体段落楷体；与 Debian fonts-arphic-gkai00mp 逐字节一致；.gz 由下载脚本解压后校验"
     }
   ]
 }

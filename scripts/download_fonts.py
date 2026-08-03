@@ -38,14 +38,24 @@ def sha256_of(path):
 
 
 def download(url, dest):
+    """下载 url 到 dest；URL 以 .gz 结尾时边下边解压（sha256 校验解压后内容）。"""
     tmp = dest.with_suffix(dest.suffix + ".part")
     print(f"下载: {url}")
     with urllib.request.urlopen(url, timeout=120) as resp, open(tmp, "wb") as out:
-        while True:
-            chunk = resp.read(1 << 20)
-            if not chunk:
-                break
-            out.write(chunk)
+        if url.endswith(".gz"):
+            import gzip
+            with gzip.open(resp, "rb") as gz:
+                while True:
+                    chunk = gz.read(1 << 20)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+        else:
+            while True:
+                chunk = resp.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
     tmp.rename(dest)
 
 

@@ -64,21 +64,9 @@ fontdetect.schemes = {
         features = "RawFeature={+vert,+vrt2}"
     },
 
-    -- Linux fonts (Fandol 开源字体)
-    fandol = {
-        name = "fandol",
-        fonts = {
-            main = { { "FandolSong-Regular" }, { "FandolSong" } },
-            sans = { { "FandolHei-Regular" }, { "FandolHei" } },
-            kai = { { "FandolKai-Regular" }, { "FandolKai" } },
-            fangsong = { { "FandolFang-Regular" }, { "FandolFang" } }
-        },
-        features = "RawFeature={+vert,+vrt2}"
-    },
-
-    -- Ubuntu fonts (文泉驿/Noto)
-    ubuntu = {
-        name = "ubuntu",
+    -- Linux fonts（Noto/思源 + 霞鹜文楷 + 朱雀仿宋，均为可确认的开放授权）
+    linux = {
+        name = "linux",
         fonts = {
             main = {
                 { "Noto Serif CJK SC", "Noto Serif CJK TC" },
@@ -89,10 +77,12 @@ fontdetect.schemes = {
                 { "Source Han Sans SC", "思源黑体", "思源黑體", "Source Han Sans TC" }
             },
             kai = {
-                { "AR PL UKai CN", "AR PL UKai TW" },
+                { "AR PL UKai CN", "AR PL UKai TW", "AR PL KaitiM GB", "AR PL KaitiM Big5" },
+                { "LXGW WenKai GB", "霞鹜文楷 GB", "LXGW WenKai", "霞鹜文楷" },
                 { "WenQuanYi Zen Hei", "文泉驿正黑", "文泉驛正黑" }
             },
             fangsong = {
+                { "Zhuque Fangsong", "Zhuque Fangsong (technical preview)", "朱雀仿宋" },
                 { "Noto Serif CJK SC", "Noto Serif CJK TC" },
                 { "Source Han Serif SC", "思源宋体", "思源宋體", "Source Han Serif TC" }
             }
@@ -217,7 +207,7 @@ function fontdetect.auto_select_scheme()
     elseif os_name == "mac" then
         scheme = fontdetect.schemes.mac
     else
-        scheme = fontdetect.schemes.fandol
+        scheme = fontdetect.schemes.linux
     end
 
     if scheme then
