@@ -51,6 +51,8 @@ tex/
 │   ├── luatex-cn-guji-jiazhu.sty        # 夹注
 │   ├── luatex-cn-guji-pizhu.sty         # 批注
 │   └── luatex-cn-guji-yinzhang.sty      # 印章
+├── shared/         # clreq 共享规则内核（标点表 / 行内调整求解器 / 禁则 / 字面锚点，横竖排共用）
+├── hori/           # 横排后端（clreq 横排管道）
 ├── banxin/         # 版心相关
 ├── decorate/       # 装饰元素
 ├── digital/        # 数字化布局模式（ltc-guji-digital）
@@ -60,9 +62,11 @@ tex/
 └── debug/          # 调试工具
 
 test/
-├── unit_test/        # 单元测试（31 个文件，texlua 运行）
+├── unit_test/        # 单元测试（43 个文件，texlua 运行）
 │   ├── util/         # 工具函数测试
 │   ├── core/         # 核心渲染引擎测试
+│   ├── shared/       # clreq 共享内核测试
+│   ├── hori/         # 横排后端测试
 │   ├── guji/         # 古籍功能测试
 │   ├── decorate/     # 装饰元素测试
 │   ├── banxin/       # 版心测试
@@ -263,7 +267,7 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 
 - **测试顺序**: 先 `texlua test/run_all.lua` → 再 `python3 test/regression_test.py check`
 - **改动源码时必须同步更新 unit test**（如果会影响测试结果）
-- 31 个测试文件覆盖 util/core/guji/decorate/banxin/fonts/debug 层
+- 43 个测试文件覆盖 util/core/shared/hori/guji/decorate/banxin/fonts/debug 层
 - Mock 基础设施在 `test/test_utils.lua`，包含 node/tex/font/texio/luatexbase/token/utf8 的 mock
 - `_internal` 表用于白盒测试（layout-grid, flatten-nodes, render-page, render-position 等模块已导出）
 - **常见坑**: `new_attribute` mock 必须返回不同 ID（用递增计数器），否则属性碰撞导致测试失败

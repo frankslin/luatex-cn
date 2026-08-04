@@ -5,7 +5,7 @@
 
 ---
 
-## 0. 进度总览（截至 2026-08-02）
+## 0. 进度总览（截至 2026-08-04）
 
 | 阶段 | 状态 | 遗留 |
 |------|------|------|
@@ -25,8 +25,8 @@
 `shared/luatex-cn-punct-anchors.lua`，中国大陆/台湾 × 横/竖全矩阵）；
 `punct-table` 对 open/close 仍仅按中国大陆口径建模（台式括号居中口径待 H7 收尾）。
 
-**测试现状**：unit test 41/41 通过（含 `test/unit_test/shared/` 6 个模块、
-`test/unit_test/hori/` 4 个模块）；`python3 test/clreq_test.py` 95 条度量断言全绿
+**测试现状**：unit test 43/43 通过（含 `test/unit_test/shared/` 7 个模块、
+`test/unit_test/hori/` 4 个模块）；`python3 test/clreq_test.py` 98 条度量断言全绿
 （`hori.tex` 主用例 + `stress-unbreakable.tex` 压力用例含叹问号叠加 +
 `hori-taiwan.tex` 台式用例 + `vert-punct.tex` 竖排用例含中国大陆式偏靠与
 cm 缩放解析）；回归用例 `basic/hori.tex`、`basic/hori-taiwan.tex`、
