@@ -1,0 +1,18 @@
+% dash_ccmp_issue119.tex - 回归测试: 破折号 ccmp 合字的拆解
+% Issue: https://github.com/open-guji/luatex-cn/issues/119
+%
+% 带 ccmp 的字体（思源宋体 / Noto CJK）在 shaping 阶段就把 —— 合成一个
+% U+2E3A 字形（实测宽约 1.7 em，只有横排形）。这早于 flatten，竖排引擎
+% 拿到的是「一个字」：两个破折号挤进一格、没有竖排形、也无从判断连排。
+% 修复是在 flatten 里把它拆回两个 em dash，各自走标准流程。
+%
+% 断口本身用 TW-Kai 验证，见 dash_continuity_issue119.tex。
+\documentclass{ltc-tw-vbook}
+\setmainfont{Source Han Serif TC}
+\begin{document}
+\begin{正文}
+
+思源宋体的 ccmp 合字——拆解后占两格，连成一条线。
+
+\end{正文}
+\end{document}

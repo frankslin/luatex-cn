@@ -117,6 +117,12 @@ constants.ATTR_PUNCT_TRIM_END = luatexbase.attributes.cnverticalpuncttrimend or
 constants.ATTR_RIGID_PREV = luatexbase.attributes.cnverticalrigidprev or
     luatexbase.new_attribute("cnverticalrigidprev")
 
+-- 该字是连续破折号（—— / ———）中的一员。1 = 是。破折号的墨迹在多数字体里
+-- 够不到字幅两端，竖排连排时会在字与字之间露出断口；render 据此把墨迹沿列
+-- 方向拉满整个字幅，使一串破折号连成一条线（横向不缩放，笔画粗细不变）。
+constants.ATTR_DASH_RUN = luatexbase.attributes.cnverticaldashrun or
+    luatexbase.new_attribute("cnverticaldashrun")
+
 -- Vertical rotation attribute (for glyphs that need 90° clockwise rotation)
 -- Used when font lacks vertical glyph forms (e.g., ellipsis, em dash)
 -- Value: 1 = needs rotation, 0 or unset = normal

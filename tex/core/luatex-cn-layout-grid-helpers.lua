@@ -287,6 +287,29 @@ local function glyph_ink_span(n)
     return 0, 0
 end
 
+--- 字形墨迹的**横向**跨度（以字号为 1 的 em 比值，字形原点为 0）。
+-- 与 glyph_ink_span 同一份 boundingbox，取的是另一对分量；旋转 90° 摆放的
+-- 字形（字体缺竖排形时的破折号）沿列方向的长度就是这个横向跨度。
+-- 取不到 boundingbox 时退回字形宽度（含左右边距，偏大）。
+-- @param n (direct node) 字形节点
+-- @return (number, number) left_em, right_em
+local function glyph_ink_hspan(n)
+    local fid = D.getfont(n)
+    local f = fid and font.getfont(fid)
+    local char = D.getfield(n, "char")
+    local desc = f and f.descriptions and char and f.descriptions[char]
+    local bb = desc and desc.boundingbox
+    local upem = (f and f.units_per_em) or 1000
+    if bb and bb[1] and bb[3] and upem > 0 then
+        return bb[1] / upem, bb[3] / upem
+    end
+    local size = f and f.size
+    if size and size > 0 then
+        return 0, (D.getfield(n, "width") or 0) / size
+    end
+    return 0, 0
+end
+
 -- =============================================================================
 -- Cell height calculation (natural layout mode)
 -- =============================================================================
@@ -442,6 +465,7 @@ end
 
 helpers.create_linemark_entry = create_linemark_entry
 helpers.glyph_ink_span = glyph_ink_span
+helpers.glyph_ink_hspan = glyph_ink_hspan
 
 package.loaded['core.luatex-cn-layout-grid-helpers'] = helpers
 return helpers

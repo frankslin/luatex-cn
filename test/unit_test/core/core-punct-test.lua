@@ -698,4 +698,81 @@ test_utils.run_test("anchors: 按自身字号缩放（夹注小字）", function
     test_utils.assert_near(dx2 / dx1, 2.0, 0.01)
 end)
 
+-- ============================================================================
+-- 破折号：合字拆解与连排标注（issue #119）
+-- ============================================================================
+
+test_utils.run_test("dash_ligature_count: ⸺ / ⸻ 有正式码位", function()
+    -- 思源宋体的 ccmp 把 —— 合成 U+2E3A（实测 width ≈ 1.7 em），
+    -- 一字一格的竖排网格里必须拆回两个 em dash
+    test_utils.assert_eq(punct.dash_ligature_count(0, 0x2E3A), 2)
+    test_utils.assert_eq(punct.dash_ligature_count(0, 0x2E3B), 3)
+end)
+
+test_utils.run_test("dash_ligature_count: 普通字符不是合字", function()
+    test_utils.assert_nil(punct.dash_ligature_count(0, 0x2014))  -- — 本身
+    test_utils.assert_nil(punct.dash_ligature_count(0, 0x2026))  -- …
+    test_utils.assert_nil(punct.dash_ligature_count(0, 0x4E00))  -- 一
+end)
+
+test_utils.run_test("dash_ligature_count: 无码位合字靠 tounicode 识别", function()
+    local orig_getfont = font.getfont
+    font.getfont = function()
+        return { characters = {
+            [0xF1000] = { tounicode = "20142014" },   -- —— 合字
+            [0xF1001] = { tounicode = "201520152015" }, -- ─── 合字
+            [0xF1002] = { tounicode = "20142026" },   -- 破折号+省略号：不是
+            [0xF1003] = { tounicode = "2014" },       -- 单个：不是合字
+        } }
+    end
+    test_utils.assert_eq(punct.dash_ligature_count(1, 0xF1000), 2)
+    test_utils.assert_eq(punct.dash_ligature_count(1, 0xF1001), 3)
+    test_utils.assert_nil(punct.dash_ligature_count(1, 0xF1002))
+    test_utils.assert_nil(punct.dash_ligature_count(1, 0xF1003))
+    font.getfont = orig_getfont
+end)
+
+test_utils.run_test("annotate_rigid_units: 两字幅单元标 2，一般刚性单元标 1", function()
+    local constants = require("core.luatex-cn-constants")
+    local D = constants.D
+    local function seq_of(chars)
+        local s = {}
+        for i, c in ipairs(chars) do
+            s[i] = { node = test_utils.make_direct_node(constants.GLYPH,
+                { char = c }), char = c, punct = true }
+        end
+        return s
+    end
+    local function rigid(s, i)
+        return D.get_attribute(s[i].node, constants.ATTR_RIGID_PREV)
+    end
+    local function dash_run(s, i)
+        return D.get_attribute(s[i].node, constants.ATTR_DASH_RUN)
+    end
+
+    -- —— 是两字幅单元：内部字距要归零（=2），且两端都要拉伸墨迹
+    local s = seq_of({ 0x2014, 0x2014 })
+    punct._internal.annotate_rigid_units(s)
+    test_utils.assert_eq(rigid(s, 2), 2)
+    test_utils.assert_eq(dash_run(s, 1), 1)
+    test_utils.assert_eq(dash_run(s, 2), 1)
+
+    -- …… 同样是两字幅单元，但圆点不能拉伸
+    s = seq_of({ 0x2026, 0x2026 })
+    punct._internal.annotate_rigid_units(s)
+    test_utils.assert_eq(rigid(s, 2), 2)
+    test_utils.assert_nil(dash_run(s, 1))
+
+    -- 数字串是一般刚性单元：锁死既有字距，但不归零
+    s = seq_of({ 0x31, 0x32 })
+    punct._internal.annotate_rigid_units(s)
+    test_utils.assert_eq(rigid(s, 2), 1)
+
+    -- 破折号后面跟正文：不是同一个单元
+    s = seq_of({ 0x2014, 0x4E00 })
+    punct._internal.annotate_rigid_units(s)
+    test_utils.assert_nil(rigid(s, 2))
+    test_utils.assert_nil(dash_run(s, 1))
+end)
+
 print("\nAll core/core-punct-test tests passed!")

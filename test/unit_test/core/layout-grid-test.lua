@@ -476,6 +476,77 @@ test_utils.run_test("check_natural_kinsoku: returns nil when buffer empty", func
     test_utils.assert_nil(layout_grid._internal.check_natural_kinsoku(t_node, ctx, {}, grid_height))
 end)
 
+test_utils.run_test("check_natural_kinsoku: 两字幅单元不许断在中间（issue #119）", function()
+    -- 破折号对的后一半即将落到下一列列首：—— 会被劈成两个孤立的短横。
+    -- 断不断由同一套比价决定，但必须给出决策而不是放任断开。
+    local grid_height = 65536 * 14
+    local col_buffer = {}
+    for i = 1, 5 do
+        local n = D.new(constants.GLYPH)
+        D.setfield(n, "char", i == 5 and 0xFE31 or 0x4E00)
+        table.insert(col_buffer, {
+            node = n,
+            y_sp = (i - 1) * grid_height,
+            cell_height = grid_height,
+        })
+    end
+    local t_node = D.new(constants.GLYPH)
+    D.setfield(t_node, "char", 0xFE31)                      -- ︱ 破折号后一半
+    D.set_attribute(t_node, constants.ATTR_PUNCT_TYPE, 6)   -- nobreak
+    D.set_attribute(t_node, constants.ATTR_RIGID_PREV, 2)   -- 两字幅单元内部
+
+    local ctx = {
+        col_height_sp = 20 * grid_height,
+        cur_page = 0, cur_col = 0,
+        punct_config = { kinsoku = true },
+    }
+
+    local action = layout_grid._internal.check_natural_kinsoku(
+        t_node, ctx, col_buffer, grid_height)
+    test_utils.assert_true(action == "squeeze" or action == "stretch")
+end)
+
+test_utils.run_test("calculate_buffer_height: 两字幅单元内部不计字距", function()
+    -- 与 build_column_gaps 同口径；估算多算 0.1em 会让列尾提前换列
+    local gh = 65536 * 14
+    local function entry(char, rigid)
+        local n = D.new(constants.GLYPH)
+        D.setfield(n, "char", char)
+        if rigid then D.set_attribute(n, constants.ATTR_RIGID_PREV, rigid) end
+        return { node = n, cell_height = gh }
+    end
+    local plain = { entry(0x4E00), entry(0x4E8C) }
+    local pair = { entry(0xFE31), entry(0xFE31, 2) }
+
+    test_utils.assert_eq(layout_grid._internal.calculate_buffer_height(plain),
+        2 * gh + math.floor(gh * 0.1))
+    test_utils.assert_eq(layout_grid._internal.calculate_buffer_height(pair),
+        2 * gh)
+end)
+
+test_utils.run_test("build_column_gaps: 两字幅单元内部字距归零", function()
+    local gh = 65536 * 14
+    local function entry(char, rigid)
+        local n = D.new(constants.GLYPH)
+        D.setfield(n, "char", char)
+        if rigid then D.set_attribute(n, constants.ATTR_RIGID_PREV, rigid) end
+        return { node = n, cell_height = gh }
+    end
+    local function inter_width(entries)
+        local col = layout_grid._internal.build_column_gaps(entries, gh)
+        return col.gaps[col.inter_idx[1]].width
+    end
+
+    -- —— 占整两个字幅，中间不能再夹 0.1em，否则连排破折号露出断口
+    test_utils.assert_eq(inter_width({ entry(0xFE31), entry(0xFE31, 2) }), 0)
+    -- 数字串只是锁死字距，不归零
+    test_utils.assert_eq(inter_width({ entry(0x31), entry(0x32, 1) }),
+        math.floor(gh * 0.1))
+    -- 普通正文照旧
+    test_utils.assert_eq(inter_width({ entry(0x4E00), entry(0x4E8C) }),
+        math.floor(gh * 0.1))
+end)
+
 -- ============================================================================
 -- marker_gap_sp: 脚注标号「前紧后松」
 -- ============================================================================

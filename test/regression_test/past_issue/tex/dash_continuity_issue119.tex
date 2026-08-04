@@ -1,0 +1,25 @@
+% dash_continuity_issue119.tex - 回归测试: 破折号的连续性与不可拆分
+% Issue: https://github.com/open-guji/luatex-cn/issues/119
+%        https://github.com/open-guji/luatex-cn/issues/105
+%
+% 三件事：
+%   1) 连排渲染：—— 是一个两字幅整体。字距归零 + 墨迹拉满字幅后，两段之间
+%      不得露出断口（clreq 破折号占两个汉字宽度）。
+%   2) 跨列禁则：破折号对恰好落在列边界时，整对移到下一列，不得拆成两个
+%      孤立的短横（clreq 符号分离禁则）。
+%   3) 合字拆解：带 ccmp 的字体（思源宋体）在 shaping 阶段就把 —— 合成
+%      U+2E3A（约 1.7 em 的横排字形），必须拆回两个 em dash，否则两个字
+%      挤进一格、且没有竖排形。
+%
+% 前两条见本文件（TW-Kai 有 ︱ 竖排形）；第三条见 dash_ccmp_issue119.tex。
+\documentclass{ltc-tw-vbook}
+\setmainfont{TW-Kai}
+\begin{document}
+\begin{正文}
+
+破折号连续渲染——不应有断口。省略号……同为两字幅整体。
+
+一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二——甲乙丙丁
+
+\end{正文}
+\end{document}
