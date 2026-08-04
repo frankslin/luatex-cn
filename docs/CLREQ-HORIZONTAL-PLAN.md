@@ -15,7 +15,7 @@
 | H3 横排行间标点（专名号 / 书名号甲 / 着重号） | ✅ 完成 | — |
 | H4 行间注（拼音标音 / 中外文对照 / 词对齐） | 🟡 主线完成 | 注文悬伸、单字标音的正文字距联动、注音符号（ㄅㄆㄇ）排布 |
 | H5 段落与页面级（缩排 / 凸排 / 孤行孤字 / 段末行对齐 / 号数字号） | 🟡 主线完成 | 标题排布：占行、单页起、同行标题、跨栏标题 |
-| H6 测试、文档与发布 | 🟡 进行中 | `docs/CLREQ-CONFORMANCE.md`、用户文档 / Wiki、独立 hori 回归套件 |
+| H6 测试、文档与发布 | 🟡 进行中 | 用户文档 / Wiki、xeCJK/luatexja 人工对照、独立 hori 回归套件（符合度矩阵已建成 2026-08-04） |
 
 **当前口径**：横排后端上，clreq 的**标点规则已基本完备**，**行与段落规则除标题层
 之外亦已完备**；缺口集中在标题排布、注音符号，以及对外的符合度声明（H6）。
@@ -317,8 +317,9 @@ TeX 段落
 - 🟡 横排回归用例现挂在 `basic` 套件下（`hori.tex` / `hori-taiwan.tex` /
   `hori-para.tex`）；是否独立成 `test/regression_test/hori/` 套件待定——
   用例增多后再拆，现在拆只增加基线维护面。
-- ⬜ `docs/CLREQ-CONFORMANCE.md`：符合度声明矩阵尚未建立。这是对外宣称
-  「符合 clreq（横排）」的前置条件，也是 H6 的主要剩余工作。
+- ✅ `docs/CLREQ-CONFORMANCE.md`：符合度声明矩阵已建立（2026-08-04）——
+  逐条对 clreq TR 章节编号、横/竖排双列状态、证据指向断言与用例，
+  含有意偏离（5 条）与不实现（3 条）清单及维护约定。
 - ⬜ 用户文档 / Wiki：`luatex-cn-hori` 的键值表（style / kinsoku-level /
   line-end-punct / hanging-punct / adjacent-punct / line-start-bracket /
   quote-style / orphan-char / last-line / widow-penalty / club-penalty 等）
@@ -506,9 +507,8 @@ H0–H3 的规则内核部分已闭环。
 **此后的实际推进**：H1 → H2 → H3/H4 → H5 均已落地（见第 0 节总览）。
 当前建议的下一步有两条，可择一或并行：
 
-1. **H6 的符合度矩阵**（`docs/CLREQ-CONFORMANCE.md`）——成本低、对外价值最高，
-   做完即可正式声称「横排符合 clreq 标点与行/段落规则」，并把标题排布、注音符号、
-   非典型标点等如实标为「未实现」。
+1. ~~**H6 的符合度矩阵**~~——已建成（2026-08-04，`docs/CLREQ-CONFORMANCE.md`）；
+   H6 剩余为用户文档 / Wiki 与 xeCJK/luatexja 人工对照。
 2. **P2 竖排接线**——P1 的宽度调整（#132）与字面锚定（#138）已回流，
    叹问号叠加等 P2 前置（#137/#139）已清；vbook 两类仍缺优先级模型、
    禁则级别硬编码、行尾悬挂与均排缺失，是当前项目主战场与 clreq 现状的
