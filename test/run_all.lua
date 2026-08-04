@@ -51,6 +51,7 @@ local tests = {
     "test/unit_test/guji/judou-test.lua",
     "test/unit_test/guji/danye-test.lua",
     "test/unit_test/guji/meipi-test.lua",
+    "test/unit_test/guji/jiazhu-shortcut-test.lua",
 
     -- Plugin/Feature layer: decorate
     "test/unit_test/decorate/decorate-test.lua",
