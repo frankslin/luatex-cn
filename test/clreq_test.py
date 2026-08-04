@@ -47,13 +47,14 @@ EPS = 0.01
 # ============================================================================
 
 class Glyph:
-    __slots__ = ("char", "x0", "x1", "em")
+    __slots__ = ("char", "x0", "x1", "em", "case")
 
-    def __init__(self, char, x0, x1, em):
+    def __init__(self, char, x0, x1, em, case=None):
         self.char = char    # str（可能是多码位，取首字符即可）
         self.x0 = x0        # 行内起点 pt
         self.x1 = x1        # 行内终点（起点+advance）pt
         self.em = em        # 字号 pt
+        self.case = case    # 所属用例 ID（夹具里 \用例{id}{…} 标出），或 None
 
     def __repr__(self):
         return f"{self.char}@{self.x0:.2f}"
@@ -73,6 +74,9 @@ class Line:
         """第 i 与 i+1 个字形之间的间隙（em，可为负=压入前字空白）。"""
         a, b = self.glyphs[i], self.glyphs[i + 1]
         return (b.x0 - a.x1) / a.em
+
+    def has_case(self, case):
+        return any(g.case == case for g in self.glyphs)
 
 
 def parse_tounicode(cmap_bytes):
@@ -209,7 +213,10 @@ def parse_pdf(path):
         NUM + rb" " + NUM + rb" (cm|Tm)"
         rb"|/(F\d+)\s+([\d.]+)\s+Tf"
         rb"|\[((?:<[0-9A-Fa-f]*>|-?[\d.]+|\s)*)\]TJ"
-        rb"|(?<![\w<])(q|Q)(?![\w>])", re.DOTALL)
+        rb"|(?<![\w<])(q|Q)(?![\w>])"
+        # 用例 ID：夹具里 \用例{id}{…} 写出的 marked content（见 hori.tex）
+        rb"|/Span\s*<</T\s*\(([^)]*)\)>>\s*BDC"
+        rb"|(?<![\w/])(EMC)(?![\w])", re.DOTALL)
 
     def mat_mul(m1, m2):
         """行向量约定 p' = p·M 下的矩阵乘 m1×m2（各为 a,b,c,d,e,f）。"""
@@ -232,7 +239,15 @@ def parse_pdf(path):
         stack = []
         tm = IDENT
         x_txt = 0.0          # 文本空间内沿书写方向累计的位移（pt）
+        case_stack = []      # 当前嵌套的用例 ID（BDC/EMC）
         for m in op_re.finditer(data):
+            if m.group(12) is not None:          # /Span <</T (id)>> BDC
+                case_stack.append(m.group(12).decode())
+                continue
+            if m.group(13):                      # EMC
+                if case_stack:
+                    case_stack.pop()
+                continue
             if m.group(7):                       # cm / Tm
                 mat = tuple(float(m.group(k)) for k in range(1, 7))
                 if m.group(7) == b"cm":
@@ -275,7 +290,9 @@ def parse_pdf(path):
                     adv = widths.get(cid, dw) / 1000.0 * cur_size
                     ch = tounicode.get(cid, "�")
                     x_dev = x_txt * a + e
-                    line.glyphs.append(Glyph(ch, x_dev, x_dev + adv * a, em_eff))
+                    line.glyphs.append(Glyph(
+                        ch, x_dev, x_dev + adv * a, em_eff,
+                        case_stack[-1] if case_stack else None))
                     x_txt += adv
 
     # 行内按 x 排序；按页与 y（自上而下）排序输出
@@ -405,6 +422,28 @@ def find_line(lines, substring):
     raise SystemExit(f"断言无法定位：没有一行包含「{substring}」")
 
 
+def case_lines(lines, case):
+    """按用例 ID 取该用例的所有行（夹具里 \\用例{id}{…} 标出）。
+
+    比 find_line 的字面选择器可靠：说明文字、别的用例里出现同样的字
+    也不会串台。定位不到就直接失败——夹具漏包了 ID 应当立刻暴露，
+    而不是退化成「量了页面上第一处碰巧匹配的字」。
+    """
+    hit = [ln for ln in lines if ln.has_case(case)]
+    if not hit:
+        raise SystemExit(f"断言无法定位：PDF 里没有用例「{case}」的字形——"
+                         f"夹具是否忘了用 \\用例{{{case}}}{{…}} 包起来？")
+    return hit
+
+
+def find_in_case(lines, case, substring):
+    """在指定用例内找含 substring 的行。"""
+    for line in case_lines(lines, case):
+        if substring in line.text:
+            return line
+    raise SystemExit(f"断言无法定位：用例「{case}」里没有一行包含「{substring}」")
+
+
 def gap_after(line, substring):
     """substring 最后一个字符与其后一个字形之间的 gap（em）。"""
     idx = line.text.find(substring)
@@ -423,19 +462,24 @@ def run_assertions(lines):
 
     # ---- 中西混排：汉字与西文字母、数字间不多于 1/4 汉字宽，
     #      行内调整可挤至 1/8、拉至 1/2（clreq: 中、西文混排处理）
-    for where, sub in [("有空格源码", "基于"), ("无空格源码", "结果为")]:
-        line = find_line(lines, sub)
+    # 「结果为」两段都有（测量/复测），必须按用例 ID 取，否则两条断言
+    # 量的是同一段——无空格源码那条会被静默跳过
+    for where, line, sub in [
+            ("有空格源码", find_line(lines, "基于"), "基于"),
+            ("无空格源码", find_in_case(lines, "sep-unspaced", "结果为"), "结果为")]:
         g = gap_after(line, sub)
         r.check("中西间距", f"{where}「{sub}|→西文」gap={g:.3f}em ∈ [1/8, 1/2]",
                 0.125 - EPS <= g <= 0.5 + EPS)
 
-    line = find_line(lines, "毫米")
-    g = -1
-    idx = line.text.find("毫米")
-    if idx > 0:
-        g = line.gap_em(idx - 1)  # 数字 | 毫
-    r.check("中西间距", f"「数字|毫米」gap={g:.3f}em ∈ [1/8, 1/2]",
-            0.125 - EPS <= g <= 0.5 + EPS)
+    # 「毫米」同样两段各一处，两处都要量
+    for where, case in [("有空格源码", "sep-spaced"), ("无空格源码", "sep-unspaced")]:
+        line = find_in_case(lines, case, "毫米")
+        g = -1
+        idx = line.text.find("毫米")
+        if idx > 0:
+            g = line.gap_em(idx - 1)  # 数字 | 毫
+        r.check("中西间距", f"{where}「数字|毫米」gap={g:.3f}em ∈ [1/8, 1/2]",
+                0.125 - EPS <= g <= 0.5 + EPS)
 
     # ---- 例外：点号前后不加中西间距（clreq: 在中文点号前后…不调整字距或加入空白）
     line = find_line(lines, "Hello")
@@ -576,7 +620,8 @@ def run_assertions(lines):
             str(bad[:3]))
 
     # ---- H4 行间注：注文行（小字号）存在；注文块与基文块居中对齐（clreq 词对齐）
-    ann_lines = [ln for ln in lines if ln.glyphs and ln.glyphs[0].em < 8]
+    ruby = case_lines(lines, "h4-ruby")
+    ann_lines = [ln for ln in ruby if ln.glyphs and ln.glyphs[0].em < 8]
     r.check("行间注", f"存在小字号注文行（{len(ann_lines)} 行 ≥ 2）",
             len(ann_lines) >= 2)
     ann = next((ln for ln in ann_lines if "zhōngguó" in ln.text), None)
@@ -585,8 +630,9 @@ def run_assertions(lines):
         i = ann.text.find("zhōngguó")
         a0 = ann.glyphs[i].x0
         a1 = ann.glyphs[i + len("zhōngguó") - 1].x1
-        base = find_line(lines, "中")
-        j = base.text.find("中")
+        # 基文行取本用例内的行：页面说明文字里也有「中国」，按字面找会串台
+        base = next(ln for ln in ruby if ln is not ann and "中国" in ln.text)
+        j = base.text.find("中国")
         # 注文比基文宽 → 基文「中 国」被加大字距铺满注文宽（clreq: 长于基文时
         # 加大基文字距），两块中心应重合
         b0 = base.glyphs[j].x0
