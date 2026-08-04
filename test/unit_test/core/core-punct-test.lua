@@ -578,7 +578,7 @@ end)
 test_utils.run_test("flatten: 句号在结束夹注符号前收回末端半字（始端为 0）", function()
     local r = flatten_chars({ 0x5B57, 0x3002, 0x300D }, CONTEXT_CTX)
     test_utils.assert_eq(r[2].total, 0.5)
-    test_utils.assert_eq(r[2].head, 0, "大陆式点号的空白在末端，始端收回必须为 0")
+    test_utils.assert_eq(r[2].head, 0, "中国大陆式点号的空白在末端，始端收回必须为 0")
 end)
 
 test_utils.run_test("flatten: 开始夹注符号跟在标点后收回始端半字", function()
@@ -624,7 +624,7 @@ end)
 
 local anchors = require("shared.luatex-cn-punct-anchors")
 
-test_utils.run_test("anchors: 大陆式直排——墨心挪到偏靠锚点", function()
+test_utils.run_test("anchors: 中国大陆式直排——墨心挪到偏靠锚点", function()
     local em = 655360   -- 10pt
     -- KingHwa 逗号实测 bbox（横排形，墨迹在左下）：{103,-107,309,248}/1000
     local dx, dy = anchors.offsets(0xFF0C, "mainland", "vertical",
@@ -635,12 +635,12 @@ test_utils.run_test("anchors: 大陆式直排——墨心挪到偏靠锚点", fu
     test_utils.assert_near(dy / em, a.y - 0.0705, 0.001)
 end)
 
-test_utils.run_test("anchors: 大陆式直排是偏靠不是居中（回归守卫）", function()
+test_utils.run_test("anchors: 中国大陆式直排是偏靠不是居中（回归守卫）", function()
     -- 曾误取字形 bbox 中心（0.49）当锚点，偏靠整个丢失、退化为居中
     for _, c in ipairs({ 0xFF0C, 0x3001, 0x3002, 0xFF1A, 0xFF1B, 0xFF01, 0xFF1F }) do
         local a = anchors.anchor(c, "mainland", "vertical")
         test_utils.assert_true(a.x > 0.7,
-            string.format("U+%04X 直排大陆锚点应偏右", c))
+            string.format("U+%04X 直排中国大陆锚点应偏右", c))
     end
     -- 句号在右上：y 锚点高于逗号
     test_utils.assert_true(anchors.anchor(0x3002, "mainland", "vertical").y
@@ -663,13 +663,13 @@ test_utils.run_test("anchors: 台湾式居中，横竖同值（TW-Kai 样板零�
     test_utils.assert_eq(dy, 0)
 end)
 
-test_utils.run_test("anchors: 大陆式横排靠左下（思源宋体样板）", function()
+test_utils.run_test("anchors: 中国大陆式横排靠左下（思源宋体样板）", function()
     for _, c in ipairs({ 0xFF0C, 0x3001, 0x3002 }) do
         local a = anchors.anchor(c, "mainland", "horizontal")
         test_utils.assert_true(a.x < 0.3,
-            string.format("U+%04X 横排大陆锚点应偏左", c))
+            string.format("U+%04X 横排中国大陆锚点应偏左", c))
         test_utils.assert_true(a.y < 0.15,
-            string.format("U+%04X 横排大陆锚点应偏下", c))
+            string.format("U+%04X 横排中国大陆锚点应偏下", c))
     end
     -- 样板字体（思源宋体）自身位移为零：，bbox 中心 (0.153, -0.039)
     local dx, dy = anchors.offsets(0xFF0C, "mainland", "horizontal",

@@ -188,9 +188,9 @@ end
 -- @param head_d (direct node) list head
 -- @return (direct node) list head (unchanged)
 -- clreq 字面分布（度量锚定，共享层 punct-anchors）：把点号/中点类的墨迹
--- 挪到本风格的规范位置——大陆式靠左下（GB 惯例）、台湾式居中。字体把
+-- 挪到本风格的规范位置——中国大陆式靠左下（GB 惯例）、台湾式居中。字体把
 -- 墨迹画在哪是字体的设计惯例（TW-Kai 两向居中、思源宋体左下），排版
--- 风格不应随字体漂移：大陆式文档用 TW-Kai 时点号也应落到左下，台湾式
+-- 风格不应随字体漂移：中国大陆式文档用 TW-Kai 时点号也应落到左下，台湾式
 -- 文档用思源宋体时也应居中。xoffset/yoffset 只挪字面不动 advance，
 -- 对断行、间隙与 H2 二次分配均无影响。style=none / 无 bbox 时不动。
 local function apply_ink_anchor(g)

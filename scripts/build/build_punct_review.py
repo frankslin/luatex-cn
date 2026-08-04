@@ -2,13 +2,13 @@
 """标点排版审阅图：字体 × 风格 × 排向 一图尽览。
 
 改动标点偏靠/挤压规则后，逐个打开基线图对比费时费眼。本脚本把
-  {TW-Kai(楷), Source Han Serif SC(宋)} × {大陆式, 台湾式} × {竖排, 横排}
+  {TW-Kai(楷), Source Han Serif SC(宋)} × {中国大陆式, 台湾式} × {竖排, 横排}
 共 8 个组合各排一小页，同一段样例文本（覆盖 ，。：；？！、「」『』），
 拼成一张带框带标注的审阅图。每格左上角印着模式名，肉眼扫一遍即可确认：
 
-  - 大陆式竖排：点号偏右上（贴前字），中点类偏右直立
+  - 中国大陆式竖排：点号偏右上（贴前字），中点类偏右直立
   - 台湾式竖排：一律居中
-  - 横排：大陆式点号靠左下、台式居中（由 luatex-cn-hori 排）
+  - 横排：中国大陆式点号靠左下、台式居中（由 luatex-cn-hori 排）
   - 两种字体在同一模式下观感应一致（度量驱动的意义所在）
 
 用法：
@@ -64,11 +64,11 @@ FONTS_LIST = [
 def build_matrix():
     cases = []
     for flabel, font in FONTS_LIST:
-        for slabel, cls, style in [("大陆式", "ltc-cn-vbook", "mainland"),
+        for slabel, cls, style in [("中国大陆式", "ltc-cn-vbook", "mainland"),
                                    ("台湾式", "ltc-tw-vbook", "taiwan")]:
             cases.append((f"竖排·{slabel}·{flabel}",
                           VERT_TPL % {"cls": cls, "font": font, "sample": SAMPLE}))
-        for slabel, style in [("大陆式", "mainland"), ("台湾式", "taiwan")]:
+        for slabel, style in [("中国大陆式", "mainland"), ("台湾式", "taiwan")]:
             cases.append((f"横排·{slabel}·{flabel}",
                           HORI_TPL % {"font": font, "style": style,
                                       "sample": SAMPLE}))

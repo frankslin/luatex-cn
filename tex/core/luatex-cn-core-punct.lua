@@ -971,13 +971,13 @@ local MAINLAND_OFFSETS = {
 -- 补偿」，而是直接把字形**墨迹**锚到字幅内的规范位置。锚点表与位移计算
 -- 在共享层 shared/luatex-cn-punct-anchors.lua（HR5：clreq 规则只写在
 -- tex/shared/，横排 hori-pipeline 用同一模块）：
---   大陆式直排：点号偏靠右上（x=0.857，贴前字）；
---   台湾式：字面居中——**字体自己居不居中无所谓**：大陆惯例设计的字体
+--   中国大陆式直排：点号偏靠右上（x=0.857，贴前字）；
+--   台湾式：字面居中——**字体自己居不居中无所谓**：中国大陆惯例设计的字体
 --   （思源宋体、京華老宋体）横排形在左下、vert 形在右上，不锚定的话
 --   台湾式版面会随字体漂移。
 -- 教训：锚点不能从 Tm 相对坐标量——xoffset 会写进 Tm，量出来的只是
 -- 字形自身的 bbox 中心，偏靠会整个丢失、退化为居中。
--- 无 boundingbox 可查时，大陆式退回上面的经验偏移路径，台湾式不动。
+-- 无 boundingbox 可查时，中国大陆式退回上面的经验偏移路径，台湾式不动。
 
 --- Render stage: apply punctuation style offsets
 -- Anchors the ink of dot/middle punctuation per style (mainland 偏靠 /
@@ -996,7 +996,7 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
     -- style=none：clreq 不调整预设，字面不挪动。
     -- 台湾式的度量锚定只在 context 挡位（vbook 类）启用：ltc-guji 默认
     -- taiwan + legacy，字面位置维持字体原样（R5：古籍版面不动）。
-    -- 大陆式沿 #138 的口径不加挡位（现存大陆式文档类均为 context）。
+    -- 中国大陆式沿 #138 的口径不加挡位（现存中国大陆式文档类均为 context）。
     local do_taiwan = (ctx.style == "taiwan" and ctx.squeeze_mode == "context")
     if ctx.style ~= "mainland" and not do_taiwan then return head end
 
@@ -1053,7 +1053,7 @@ function punct.render(head, layout_map, render_ctx, ctx, engine_ctx, page_idx, p
                     -- glyphs whose ink is not centered in the advance width.
                     -- Compensate so the glyph visually centers before applying
                     -- the mainland style offset.
-                    -- 经验偏移是大陆式的退路；台湾式无 bbox 时不动（字体原样）。
+                    -- 经验偏移是中国大陆式的退路；台湾式无 bbox 时不动（字体原样）。
                     local glyph_width = grid_width -- fallback
                     if not metric_done and ctx.style == "mainland" and fid and char then
                         local fi = font.getfont(fid)

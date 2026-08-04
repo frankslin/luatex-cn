@@ -28,7 +28,7 @@ end
 -- 字面空白（clreq: 标点符号的宽度调整——全角字幅内的空白位置）
 -- ============================================================================
 
-test_utils.run_test("大陆式点号空白在末端，夹注符号在贴合侧", function()
+test_utils.run_test("中国大陆式点号空白在末端，夹注符号在贴合侧", function()
     local h, t = sq.blanks(COMMA, V)
     approx(h, 0); approx(t, 0.5)
     h, t = sq.blanks(OPEN, V)

@@ -317,7 +317,7 @@ class Column:
     def span_em(self, i, j):
         """第 i 与第 j 个字形基线之间的距离（em）。
 
-        直排的大陆式点号在渲染时另有偏靠位移（字面偏右上），所以「标点占
+        直排的中国大陆式点号在渲染时另有偏靠位移（字面偏右上），所以「标点占
         几个字幅」要用它**两侧汉字**的基线距离来量，而不是标点自身的位移。
         """
         (_, y0, em) = self.glyphs[i][:3]
@@ -356,7 +356,7 @@ def parse_pdf_vertical(path, min_len=4):
     if not placements:
         return []
 
-    # x 聚类：大陆式点号渲染时向列外侧偏靠（MAINLAND_OFFSETS），x 与同列
+    # x 聚类：中国大陆式点号渲染时向列外侧偏靠（MAINLAND_OFFSETS），x 与同列
     # 汉字相差约 0.2 字宽；脚注标号（缩放小字）也偏出约 0.35 字宽。
     # 容差基准取全文档 em 的中位数——取「第一个字形」会让结果取决于
     # 恰好谁排在最上面（若是小字号的标号，容差缩水导致同列被拆开）。
@@ -772,7 +772,7 @@ def find_column(cols, substring):
 def run_vertical_assertions(cols):
     """直排标点宽度调整（vert-punct.tex，ltc-cn-vbook + 上下文相关挤压）。
 
-    度量方式：直排字幅的挤压体现为基线步长缩短。大陆式点号在渲染时另有
+    度量方式：直排字幅的挤压体现为基线步长缩短。中国大陆式点号在渲染时另有
     偏靠位移，故一律以**两侧汉字**的基线距离（span）度量「这段占几个字
     幅」，标点本身的位移不进入测量。
     """
@@ -819,7 +819,7 @@ def run_vertical_assertions(cols):
             abs(n - 2.5) < EPS)
 
     # ---- ④ 挤压方向（clreq: 收回的是哪一侧的空白，字面就往哪边让）
-    #      大陆式点号的空白在末端 → 收回后字面**不动**，让后一个符号上移；
+    #      中国大陆式点号的空白在末端 → 收回后字面**不动**，让后一个符号上移；
     #      开始夹注符号的空白在始端 → 收回后字面向后贴紧被夹注的内容。
     ref = base.span_em(base.index_of("荒"), base.index_of("。")) / unit
     got = col.span_em(col.index_of("好"), col.index_of("。")) / unit
@@ -879,7 +879,7 @@ def run_vertical_assertions(cols):
             f"相位扫描扫到 {len(head_cols)} 列以开始夹注符号起头（应 ≥ 1）",
             len(head_cols) >= 1)
 
-    # ---- ⑤bis 大陆式偏靠（回归守卫）：点号与中点类的 Tm 原点应显著
+    # ---- ⑤bis 中国大陆式偏靠（回归守卫）：点号与中点类的 Tm 原点应显著
     #      偏向列的外侧（右）。字面分布改度量驱动时曾把锚点误取为字形
     #      bbox 中心（0.49），偏靠整个丢失、标点回归为居中——TW-Kai 的
     #      vert 形墨迹近似居中（cx≈0.5），偏靠必然体现在 xoffset 上，
@@ -896,7 +896,7 @@ def run_vertical_assertions(cols):
         for g in col.glyphs:
             if g[0] in "，。、：；？！":
                 off = (g[3] - hanzi_x) / g[2]
-                r.check("大陆式偏靠",
+                r.check("中国大陆式偏靠",
                         f"「{g[0]}」Tm 原点右移 {off:+.3f}em（应 > 0.2，居中即回归）",
                         off > 0.2)
                 marks_checked += 1
@@ -904,7 +904,7 @@ def run_vertical_assertions(cols):
                     break
         if marks_checked >= 6:
             break
-    r.check("大陆式偏靠", f"抽查了 {marks_checked} 个点号（应 ≥ 4）",
+    r.check("中国大陆式偏靠", f"抽查了 {marks_checked} 个点号（应 ≥ 4）",
             marks_checked >= 4)
 
     # ---- ⑥ 解析器：cm 缩放字形的坐标（锁住解析器对 cm 级联的跟踪）

@@ -263,7 +263,7 @@ child.y = parent.y + child.rel_y
 |------|-------------|
 | Grid 模式正文 | `grid_height`（固定值） |
 | Natural 模式正文 | 字形实际高度 |
-| 标点（大陆模式） | `grid_height × 0.5` |
+| 标点（中国大陆模式） | `grid_height × 0.5` |
 | 标点（台湾模式） | `grid_height`（全格） |
 | 夹注字符 | `grid_height × jiazhu_scale` |
 

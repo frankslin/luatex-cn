@@ -80,7 +80,7 @@ constants.ATTR_PUNCT_SQUEEZE = luatexbase.attributes.cnverticalpunctsqueeze or
     luatexbase.new_attribute("cnverticalpunctsqueeze")
 
 -- 其中**始端**（直排为上侧）收回的量，同样是 1 + 千分比。
--- clreq 规定字面空白有确定的一侧（大陆式点号在末端、开始夹注符号在始端），
+-- clreq 规定字面空白有确定的一侧（中国大陆式点号在末端、开始夹注符号在始端），
 -- 收回哪一侧决定字面往哪边贴：收末端空白不移动字面（后字上移），收始端
 -- 空白才让字面向后贴紧被夹注内容。渲染阶段据此还原字面位置。
 constants.ATTR_PUNCT_SQUEEZE_HEAD = luatexbase.attributes.cnverticalpunctsqhead or

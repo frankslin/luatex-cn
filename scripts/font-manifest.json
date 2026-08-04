@@ -163,11 +163,11 @@
         "member": "OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf"
       },
       "urls": [],
-      "coverage": "简体中文子集（GB 18030）；大陆式标点字面（偏靠始端）",
+      "coverage": "简体中文子集（GB 18030）；中国大陆式标点字面（偏靠始端）",
       "required_for": [
         "regression-test"
       ],
-      "comment": "横排 clreq 测试（basic/hori.tex）：大陆偏靠式标点需要 SC 字面，TW-Kai 标点为台式居中不适用"
+      "comment": "横排 clreq 测试（basic/hori.tex）：中国大陆偏靠式标点需要 SC 字面，TW-Kai 标点为台式居中不适用"
     },
     {
       "name": "SourceHanSerifTC",

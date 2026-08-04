@@ -193,8 +193,8 @@ test_utils.run_test("head is preserved", function()
     test_utils.assert_eq(head, g1)
 end)
 
-test_utils.run_test("ink anchor: 大陆式把居中字形的点号墨迹挪到左下", function()
-    -- 模拟 TW-Kai（字形居中，bbox 中心 (0.495, 0.311)）在大陆式横排：
+test_utils.run_test("ink anchor: 中国大陆式把居中字形的点号墨迹挪到左下", function()
+    -- 模拟 TW-Kai（字形居中，bbox 中心 (0.495, 0.311)）在中国大陆式横排：
     -- 墨迹应被挪去左下锚点 → xoffset/yoffset 均为负
     local orig_getfont = font.getfont
     font.getfont = function(id)

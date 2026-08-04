@@ -1,6 +1,6 @@
 -- Unit tests for punct_ink_placement (core.luatex-cn-core-render-page-process)
 --
--- clreq 《标点符号的宽度调整》规定字面空白有确定的一侧：大陆式点号在末端、
+-- clreq 《标点符号的宽度调整》规定字面空白有确定的一侧：中国大陆式点号在末端、
 -- 开始夹注符号在始端。收回哪一侧，字面就往哪边让——所以缩短的字幅只用于
 -- 列内排版算术，定位必须按原始满幅进行、再按始端收回量上移。
 -- 回归对象：若把收回量当作对称缩短，居中逻辑会让句号向上飘半个收回量、
@@ -24,7 +24,7 @@ test_utils.run_test("未参与上下文挤压的字形原样返回", function()
 end)
 
 test_utils.run_test("收回末端空白：定位用满幅、起点不动（字面原地不动）", function()
-    -- 大陆式句号紧邻结束夹注符号：收回末端 0.5 em，始端 0
+    -- 中国大陆式句号紧邻结束夹注符号：收回末端 0.5 em，始端 0
     local shrunk = FULL // 2
     local h, y = place(shrunk, Y, 501, 1, EM)
     test_utils.assert_eq(h, shrunk + 0.5 * EM, "定位应按原始满幅")
