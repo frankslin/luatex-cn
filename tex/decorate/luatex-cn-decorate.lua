@@ -70,6 +70,20 @@ function decorate.clear_registry()
     _G.decorate_registry = {}
 end
 
+--- clreq 5.3.1「标点符号上不加着重号」：基字是否该跳过着重标记。
+-- 由 \EmphasisMark 在 skip-punct 开启时逐字调用（判定的是**基字**，
+-- 与 decorate 的装饰字符无关，故不并入 register）。分类走共享标点表，
+-- 与横排 hori-linemark 的 is_punct 同一口径。
+-- @param s (string) 基字（UTF-8，通常一个字符）
+-- @return (boolean) true 表示是标点，不应加着重号
+function decorate.is_punct_char(s)
+    if type(s) ~= "string" or s == "" then return false end
+    local ok, cp = pcall(utf8.codepoint, s, 1)
+    if not ok or not cp then return false end
+    local punct_table = require("shared.luatex-cn-punct-table")
+    return punct_table.class_of(cp) ~= nil
+end
+
 -- ============================================================================
 -- Rendering Functions (moved from render-page.lua)
 -- ============================================================================

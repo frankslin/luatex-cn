@@ -106,11 +106,24 @@
 % Syntax: \EmphasisMark[color=red]{content}
 % ============================================================================
 \tl_new:N \l__luatexcn_emphasis_color_tl
+\tl_new:N \l__luatexcn_emphasis_char_tl
+\tl_new:N \l__luatexcn_emphasis_scale_tl
+\bool_new:N \l__luatexcn_emphasis_skip_punct_bool
 
+% char / scale 的默认值是古籍圈点体例（空心圈 ○），保持 ltc-guji 版面不变；
+% clreq 5.3.1 规定的着重号是**实心圆点**，vbook 两类在各自的 cfg 里改到
+% char=●（分档依据同 punct 的 squeeze-mode，见 CLREQ-GAP-ANALYSIS 风险 R5）。
+% skip-punct：clreq「标点符号上不加着重号」，同样按类分档。
 \keys_define:nn { luatexcn / emphasis }
   {
     color .tl_set:N = \l__luatexcn_emphasis_color_tl,
     color .initial:n = black,
+    char .tl_set:N = \l__luatexcn_emphasis_char_tl,
+    char .initial:n = ○,
+    scale .tl_set:N = \l__luatexcn_emphasis_scale_tl,
+    scale .initial:n = 0.3,
+    skip-punct .bool_set:N = \l__luatexcn_emphasis_skip_punct_bool,
+    skip-punct .initial:n = false,
   }
 
 % --- emphasis namespace CJK aliases ---
@@ -118,6 +131,11 @@
   {
     颜色 .tl_set:N = \l__luatexcn_emphasis_color_tl,
     顏色 .tl_set:N = \l__luatexcn_emphasis_color_tl,
+    字符 .tl_set:N = \l__luatexcn_emphasis_char_tl,
+    缩放 .tl_set:N = \l__luatexcn_emphasis_scale_tl,
+    縮放 .tl_set:N = \l__luatexcn_emphasis_scale_tl,
+    跳过标点 .bool_set:N = \l__luatexcn_emphasis_skip_punct_bool,
+    跳過標點 .bool_set:N = \l__luatexcn_emphasis_skip_punct_bool,
   }
 
 % ============================================================================
@@ -135,10 +153,40 @@
 \NewCommandCopy{\装饰}{\decorate}
 \NewCommandCopy{\装饰设置}{\decorateSetup}
 
+% clreq 5.3.1「标点符号上不加着重号」：skip-punct 开启时逐字判定基字，
+% 标点只输出、不注册装饰。判定在 Lua 侧走共享标点表（decorate.is_punct_char），
+% 与横排 hori-linemark 同一口径。
+\cs_new:Npn \__luatexcn_emphasis_one:n #1 {
+  \bool_if:NTF \l__luatexcn_emphasis_skip_punct_bool
+    {
+      \str_if_eq:eeTF
+        {
+          \lua_now:e
+            {
+              local~d~=~require('decorate/luatex-cn-decorate')
+              tex.sprint(d.is_punct_char("\luaescapestring{#1}")~and~"P"~or~"N")
+            }
+        }
+        { P }
+        { #1 }
+        { \__luatexcn_decorate_one:n { #1 } }
+    }
+    { \__luatexcn_decorate_one:n { #1 } }
+}
+
 \NewDocumentCommand{\EmphasisMark}{ O{} m }{%
   \group_begin:
     \keys_set:nn { luatexcn / emphasis } { #1 }
-    \decorate[char=○, scale = 0.3, xshift=-0.7em, color=\l__luatexcn_emphasis_color_tl]{#2}
+    \group_begin:
+      \keys_set:nn { luatexcn / decorate }
+        {
+          char = \l__luatexcn_emphasis_char_tl,
+          scale = \l__luatexcn_emphasis_scale_tl,
+          xshift = -0.7em,
+          color = \l__luatexcn_emphasis_color_tl,
+        }
+      \tl_map_function:nN { #2 } \__luatexcn_emphasis_one:n
+    \group_end:
   \group_end:
 }
 
