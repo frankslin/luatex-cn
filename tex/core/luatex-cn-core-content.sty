@@ -452,6 +452,23 @@
     \ignorespaces
   }
 
+% Sideways Command (clreq 直排中西混排配置之「顺时针旋转 90°」)
+% Syntax: \Sideways{English} / \横置{English}
+% 组内字形经 LuaTeX 属性标记（组结束自动恢复），引擎三处协同：字幅 =
+% advance 宽度、串内字距归零、渲染绕共同基线旋转 90°。适合较长的西文
+% 词句；单个字母/缩略语通常直立即可（引擎默认逐字入格）。
+\NewDocumentCommand{\Sideways}{ m }
+  {
+    \group_begin:
+    \lua_now:e
+      {
+        local~c~=~require('core.luatex-cn-constants')
+        tex.setattribute(c.ATTR_SIDEWAYS,~1)
+      }
+    #1
+    \group_end:
+  }
+
 % ============================================================================
 % Shared Helper Functions for Content Environments
 % ============================================================================
@@ -556,6 +573,8 @@
 % Simplified Chinese / 简体
 \NewCommandCopy{\空格}{\Space}
 \NewCommandCopy{\缺字}{\MissingChar}
+\NewCommandCopy{\横置}{\Sideways}
+\NewCommandCopy{\橫置}{\Sideways}
 \NewCommandCopy{\内容设置}{\contentSetup}
 \NewCommandCopy{\内容}{\Content}
 \NewEnvironmentCopy{正文}{BodyText}

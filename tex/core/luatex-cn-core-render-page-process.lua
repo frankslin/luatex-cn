@@ -195,7 +195,35 @@ local function handle_glyph_node(curr, p_head, pos, params, ctx)
         end
     end
 
-    if needs_rotate then
+    local sideways = D.get_attribute(curr, constants.ATTR_SIDEWAYS) == 1
+
+    if sideways then
+        -- 横置西文（\横置，clreq 直排中西混排之「顺时针旋转 90°」）。
+        -- 与 needs_rotate（缺字旋转）不同：那是单字绕墨心旋转、字幅仍一格；
+        -- 这里整串字母连排成词（字幅 = advance、串内字距 0），各字形必须
+        -- 共用同一条竖直基线——锚点用字体级的升降部（按逐字 h/d 或墨心
+        -- 会左右摇摆）。矩阵 [0 −1 1 0 e f]：(x,y) → (y+e, −x+f)，字形
+        -- 基线原点 → (e, f)；advance 方向转为沿列向下，升部指向列右。
+        -- f 锚在字幅顶（cell_height = advance，字幅顶正是本字基线起点）；
+        -- e 令 [−desc, +asc] 的横向跨度居中于列。
+        local sp2bp = utils.sp_to_bp
+        local fsize = (fdata and fdata.size) or 655360
+        local pms = fdata and fdata.parameters
+        local asc = (pms and pms.ascender) or math.floor(fsize * 0.8)
+        local desc = math.abs((pms and pms.descender) or math.floor(fsize * 0.2))
+        local col_center = final_x + w / 2
+        local e = (col_center - (asc - desc) / 2) * sp2bp
+        local f = (-(pos.y_sp + (pos.band_y_offset_sp or 0)) - ctx.shift_y)
+            * sp2bp
+        D.setfield(curr, "xoffset", 0)
+        D.setfield(curr, "yoffset", 0)
+        local n_start = utils.create_pdf_literal(
+            string.format("q 0 -1 1 0 %.4f %.4f cm", e, f))
+        local n_end = utils.create_pdf_literal(
+            utils.create_graphics_state_end())
+        p_head = D.insert_before(p_head, curr, n_start)
+        D.insert_after(p_head, curr, n_end)
+    elseif needs_rotate then
         -- Rotate 90° CW and translate glyph to its grid position.
         -- The glyph is at text-space origin (xoffset=yoffset=0).
         -- Mode 0 pdf_literal wraps with T(node)/T(-node), so our matrix

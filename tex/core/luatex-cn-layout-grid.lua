@@ -1555,6 +1555,11 @@ local function est_inter_gap_sp(prev_node, prev_ch, next_node)
     if D.get_attribute(next_node, constants.ATTR_RIGID_PREV) == 2 then
         return 0
     end
+    -- 横置西文串内部：字母连排成词，无字距
+    if D.get_attribute(prev_node, constants.ATTR_SIDEWAYS) == 1
+        and D.get_attribute(next_node, constants.ATTR_SIDEWAYS) == 1 then
+        return 0
+    end
     if D.get_attribute(next_node, constants.ATTR_CJK_WESTERN_PREV) == 1 then
         local em = get_node_font_size(prev_node) or prev_ch
         return math.floor(em * 0.25)
@@ -1654,6 +1659,11 @@ local function inter_gap_desc(entries, i, grid_height, locked, two_em)
     else
         local base = math.floor(ch * GAP_RATIO)
         if two_em then
+            return { width = 0, min = 0, max = 0 }
+        end
+        -- 横置西文串内部：无字距且刚性（字母连排成词，不可拉开）
+        if D.get_attribute(e.node, constants.ATTR_SIDEWAYS) == 1
+            and D.get_attribute(nxt.node, constants.ATTR_SIDEWAYS) == 1 then
             return { width = 0, min = 0, max = 0 }
         end
         if locked then

@@ -323,6 +323,12 @@ end
 -- @param punct_config (table) Punctuation config {style, squeeze}.
 --   Callers must provide this; defaults are set at the parameter source (core-main.lua).
 local function get_cell_height(node, grid_height, punct_config)
+    -- 横置西文（\横置）：旋转 90° 后沿列方向的长度就是字形的 advance
+    -- 宽度，字幅按它计，字母才能连排成词（串内字距由 layout 归零）。
+    if D.get_attribute(node, constants.ATTR_SIDEWAYS) == 1 then
+        local w = D.getfield(node, "width")
+        if w and w > 0 then return w end
+    end
     local base
     local fs = get_node_font_size(node)
     if fs and fs > 0 then

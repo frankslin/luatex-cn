@@ -994,6 +994,22 @@ def run_vert_mixed_assertions(cols):
             f"夹注号内侧 = {inner_a:.3f} / {inner_b:.3f}（应 < 1.05——例外不加间距）",
             inner_a < 1.05 and inner_b < 1.05)
 
+    # ---- 横置（clreq 直排中西混排配置之「顺时针旋转 90°」，\横置）
+    #      字幅 = advance、串内字距 0：字母间步长应远小于直立入格的
+    #      1.1em（TW-Kai 拉丁 advance ≈ 0.5em）。旋转字形经 cm 矩阵绘制，
+    #      解析器读不到字号（em=0），步长一律以汉字步长为基准归一。
+    col = find_column(cols, "引用")
+    base_step = unit * base.glyphs[i][2]   # 汉字步长（pt）
+    letters = [k for k, g in enumerate(col.glyphs) if g[0] in "LuaTeX"]
+    r.check("横置", f"横置串在列中解析出 {len(letters)} 个字母（应 6）",
+            len(letters) == 6)
+    steps = [(col.glyphs[k][1] - col.glyphs[k + 1][1]) / base_step * 1.1
+             for k in letters[:-1]]
+    r.check("横置",
+            f"字母连排步长 = {['%.2f' % s for s in steps]}em"
+            f"（应全部 < 0.75——直立入格是 1.1）",
+            all(0.1 < s < 0.75 for s in steps), str(steps))
+
     return r
 
 

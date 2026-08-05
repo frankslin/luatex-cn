@@ -660,6 +660,25 @@ test_utils.run_test("calculate_buffer_height: 中西边界按 1/4em 估算", fun
         2 * gh + math.floor(gh * 0.25))
 end)
 
+test_utils.run_test("build_column_gaps/估算: 横置串内部零字距且刚性", function()
+    -- \横置 的字母连排成词：字幅 = advance，串内既无字距也不可拉开
+    local gh = 65536 * 14
+    local function mk(side)
+        local n = D.new(constants.GLYPH)
+        D.setfield(n, "char", 0x41)
+        if side then D.set_attribute(n, constants.ATTR_SIDEWAYS, 1) end
+        return { node = n, cell_height = math.floor(gh * 0.5) }
+    end
+    local a, b = mk(true), mk(true)
+    local col = layout_grid._internal.build_column_gaps({ a, b }, gh)
+    local inter = col.gaps[col.inter_idx[1]]
+    test_utils.assert_eq(inter.width, 0)
+    test_utils.assert_eq(inter.max, 0, "串内不可拉开——兜底均分会把词撑散")
+    test_utils.assert_eq(
+        layout_grid._internal.calculate_buffer_height({ mk(true), mk(true) }),
+        2 * math.floor(gh * 0.5), "估算同口径：串内无字距")
+end)
+
 test_utils.run_test("build_column_gaps: 刚性单元边界上的三个 gap 全部锁死", function()
     -- clreq 符号分离禁则：两字幅标点等单元内部不得有任何伸缩，
     -- 横排的教训是只清 stretch 不清 shrink 会把单元压扁
