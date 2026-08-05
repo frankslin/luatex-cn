@@ -21,7 +21,8 @@ sourcefiles           = { "**/*.sty", "**/*.cls", "**/*.lua", "**/*.cfg" }
 
 -- Documentation and example files (Chinese folders copied in ctan_hook)
 docfiles              = {
-  "README.md", "README-EN.md", "LICENSE", "VERSION", "INSTALL.md"
+  "README.md", "README-EN.md", "LICENSE", "VERSION", "INSTALL.md",
+  "docs/CLREQ-CONFORMANCE.md"
 }
 
 -- Exclude build and output directories

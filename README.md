@@ -5,8 +5,10 @@
 基于 LuaTeX 的中文排版包，做两件事：**古籍版式的精确复刻**，与**遵循 W3C《中文排版需求》(clreq) 的现代中文排版**。
 
 - **古籍竖排**：版心、夹注、侧批、眉批、脚注、印章、句读、改字、乌丝栏等开箱可用，示例已实现对四库全书文渊阁本、红楼梦甲戌本等底本的版面级复刻。
-- **现代竖排**：繁体竖排书籍版式，中国大陆式与台湾式标点两套体例。
-- **横排 clreq**（`\usepackage{luatex-cn}`，统一入口）：标点宽度调整、四级换行禁则与符号分离禁则、按 clreq 优先顺序的行内挤压／拉伸、行尾点号悬挂、行间标点（专名号／书名号甲式／着重号）、拼音标音与词对齐、孤行孤字——规则实现由 67 条 PDF 度量断言逐条核验。
+- **现代竖排**：繁体竖排书籍版式，中国大陆式与台湾式标点两套体例；标点宽度调整、按 clreq 优先顺序的行内挤压／拉伸、换行禁则、中西混排（1/4em 间距与 `\横置`）、着重号、行尾点号悬挂等均按 clreq 实现。
+- **横排 clreq**（`\usepackage{luatex-cn}`，统一入口）：标点宽度调整、四级换行禁则与符号分离禁则、按 clreq 优先顺序的行内挤压／拉伸、中西间距、行尾点号悬挂、行间标点（专名号／书名号甲式／着重号）、拼音标音与词对齐、孤行孤字。
+
+横竖排的 clreq 规则实现由 113 条 PDF 内容流度量断言逐条核验，逐条状态与有意偏离见 **[clreq 符合度矩阵](docs/CLREQ-CONFORMANCE.md)**。
 - **模板可定制**：版式参数与模板均可覆盖。
 
 CTAN: [v0.3.8](https://ctan.org/pkg/luatex-cn) | GitHub Release: [v0.3.8](https://github.com/open-guji/luatex-cn/releases)
@@ -112,6 +114,7 @@ lualatex test.tex
 | **改字与装饰** | 古籍勘误、专名号、书名号、着重号 | [改字与装饰](https://github.com/open-guji/luatex-cn/wiki/Correction) |
 | **抬头** | 单抬/双抬/三抬/平抬，自动边框包裹 | [抬头](https://github.com/open-guji/luatex-cn/wiki/Taitou) |
 | **现代标点** | 标点挤压、禁则处理、中国大陆/台湾风格 | [标点系统](https://github.com/open-guji/luatex-cn/wiki/Punctuation) |
+| **横排 clreq** | 统一入口 `\usepackage{luatex-cn}`，标点宽度调整、禁则、中西间距、行间标点、拼音标音 | [横排](https://github.com/open-guji/luatex-cn/wiki/Horizontal) |
 | **脚注** | 段末注/页下注，鹿角/带圈编号 | [脚注](https://github.com/open-guji/luatex-cn/wiki/ltc-book) |
 | **模板系统** | 内置四库全书、红楼梦甲戌本、中华书局等预设 | [模板](https://github.com/open-guji/luatex-cn/wiki/Templates) |
 | **字体管理** | 跨平台自动探测、字体族递补（Fallback） | [字体设置](https://github.com/open-guji/luatex-cn/wiki/Fonts) |
