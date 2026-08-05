@@ -38,6 +38,8 @@ VERTICAL_TEX = os.path.join(
     REPO_ROOT, "test", "clreq_test", "vert-punct.tex")
 HANGING_TEX = os.path.join(
     REPO_ROOT, "test", "regression_test", "basic", "tex", "hanging-punct.tex")
+VERT_MIXED_TEX = os.path.join(
+    REPO_ROOT, "test", "clreq_test", "vert-mixed.tex")
 FONTS_DIR = os.path.join(REPO_ROOT, "test", "fonts")
 
 # 坐标/宽度舍入容差（em）。sp 取整与 PDF 三位小数远小于此。
@@ -946,6 +948,71 @@ def run_vertical_assertions(cols):
     return r
 
 
+def run_vert_mixed_assertions(cols):
+    """直排中西混排（vert-mixed.tex，ltc-cn-vbook + context 挡位）。
+
+    clreq：汉字与西文字母/数字之间加不多于 1/4 汉字宽的间距（度量上是
+    基准字距 0.1em 升格为 0.25em，即步长 1.10 → 1.25）；点号旁与夹注号
+    内侧不加；数字串整体不拆且内部保持基准字距（P2 刚性单元）。
+    """
+    r = Reporter()
+
+    base = find_column(cols, "天地玄黄")
+    i = base.index_of("天")
+    unit = base.span_em(i, i + 1)
+    r.check("中西间距", f"纯汉字步长基准 = {unit:.3f}em（应 ≈ 1.1）",
+            abs(unit - 1.1) < EPS)
+
+    col = find_column(cols, "中A中")
+    a, b = col.index_of("中"), col.index_of("A")
+    fwd = col.span_em(a, b) / unit
+    bwd = col.span_em(b, b + 1) / unit
+    r.check("中西间距",
+            f"汉→西边界 = {fwd:.3f} 基准步长（应 ≈ 1.25/1.10 ≈ 1.136）",
+            abs(fwd - 1.25 / 1.1) < EPS)
+    r.check("中西间距",
+            f"西→汉边界 = {bwd:.3f} 基准步长（应与汉→西对称）",
+            abs(bwd - fwd) < EPS)
+
+    col = find_column(cols, "共12个")
+    d1 = col.index_of("1")
+    inside = col.span_em(d1, d1 + 1) / unit
+    lead = col.span_em(col.index_of("共"), d1) / unit
+    trail = col.span_em(d1 + 1, col.index_of("个")) / unit
+    r.check("中西间距",
+            f"数字串内部步长 = {inside:.3f}（应 ≈ 1.0——刚性单元保持基准字距）",
+            abs(inside - 1.0) < EPS)
+    r.check("中西间距",
+            f"数字串两端 = {lead:.3f} / {trail:.3f}（应 ≈ 1.136——两端都有中西间距）",
+            abs(lead - 1.25 / 1.1) < EPS and abs(trail - 1.25 / 1.1) < EPS)
+
+    col = find_column(cols, "夹注号内侧")
+    j = col.index_of("A")
+    inner_a = col.span_em(j - 1, j) / unit
+    inner_b = col.span_em(j, j + 1) / unit
+    r.check("中西间距",
+            f"夹注号内侧 = {inner_a:.3f} / {inner_b:.3f}（应 < 1.05——例外不加间距）",
+            inner_a < 1.05 and inner_b < 1.05)
+
+    # ---- 横置（clreq 直排中西混排配置之「顺时针旋转 90°」，\横置）
+    #      字幅 = advance、串内字距 0：字母间步长应远小于直立入格的
+    #      1.1em（TW-Kai 拉丁 advance ≈ 0.5em）。旋转字形经 cm 矩阵绘制，
+    #      解析器读不到字号（em=0），步长一律以汉字步长为基准归一。
+    col = find_column(cols, "引用")
+    base_step = unit * base.glyphs[i][2]   # 汉字步长（pt）
+    letters = [k for k, g in enumerate(col.glyphs) if g[0] in "LuaTeX"]
+    r.check("横置", f"横置串在列中解析出 {len(letters)} 个字母（应 6）",
+            len(letters) == 6)
+    steps = [(col.glyphs[k][1] - col.glyphs[k + 1][1]) / base_step * 1.1
+             for k in letters[:-1]]
+    r.check("横置",
+            f"字母连排步长 = {['%.2f' % s for s in steps]}em"
+            f"（应全部 < 0.75——直立入格是 1.1）",
+            all(0.1 < s < 0.75 for s in steps), str(steps))
+
+    return r
+
+
 def run_hanging_assertions(cols):
     """clreq 行尾点号悬挂（hanging-punct.tex，直排 + punct-hanging=true）。
 
@@ -1033,6 +1100,8 @@ def main():
             run_vertical_doc("vert-punct.tex 直排用例", VERTICAL_TEX, 4),
             run_vertical_doc("hanging-punct.tex 行尾悬挂用例", HANGING_TEX, 4,
                              run_hanging_assertions),
+            run_vertical_doc("vert-mixed.tex 直排中西混排用例", VERT_MIXED_TEX, 4,
+                             run_vert_mixed_assertions),
         ]
 
     passed = sum(r.passed for r in reporters)

@@ -633,6 +633,59 @@ test_utils.run_test("flatten: legacy 挡不给扩类写 ATTR_PUNCT_TYPE（R5 版
         "非扩类标点（。）不受门控影响")
 end)
 
+-- P3 中西间距：flatten 在中西边界打 ATTR_CJK_WESTERN_PREV（规则本体在
+-- shared/luatex-cn-cjk-western.lua），layout 据此把 0.1em 字距升格为
+-- 1/4em。仅 context 挡位生效；例外（点号旁、夹注号内侧）不打。
+test_utils.run_test("flatten: 中西边界打标记（context 挡位）", function()
+    local constants = require("core.luatex-cn-constants")
+    local nodes = {}
+    for i, c in ipairs({ 0x4E2D, 0x41, 0x4E2D }) do   -- 中 A 中
+        nodes[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(nodes), {}, CONTEXT_CTX)
+    test_utils.assert_eq(
+        node.direct.get_attribute(nodes[2], constants.ATTR_CJK_WESTERN_PREV), 1,
+        "中→A 边界应打标记")
+    test_utils.assert_eq(
+        node.direct.get_attribute(nodes[3], constants.ATTR_CJK_WESTERN_PREV), 1,
+        "A→中 边界应打标记")
+end)
+
+test_utils.run_test("flatten: 中西间距的例外与挡位门控", function()
+    local constants = require("core.luatex-cn-constants")
+    -- 例外：「A（开始夹注符号之后不加）
+    local nodes = {}
+    for i, c in ipairs({ 0x300C, 0x41, 0x300D }) do   -- 「 A 」
+        nodes[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(nodes), {}, CONTEXT_CTX)
+    test_utils.assert_nil(
+        node.direct.get_attribute(nodes[2], constants.ATTR_CJK_WESTERN_PREV),
+        "夹注号内侧不加中西间距")
+    -- legacy 挡位不打（ltc-guji 版面零变化）
+    local legacy = { style = "mainland", squeeze = true, squeeze_mode = "legacy" }
+    local n2 = {}
+    for i, c in ipairs({ 0x4E2D, 0x41 }) do
+        n2[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(n2), {}, legacy)
+    test_utils.assert_nil(
+        node.direct.get_attribute(n2[2], constants.ATTR_CJK_WESTERN_PREV),
+        "legacy 挡位不打中西标记")
+    -- western-space=false 可关
+    local off = { style = "mainland", squeeze = true, squeeze_mode = "context",
+        adjacent_punct = "1.5", line_start_bracket = "trim",
+        line_end_punct = "compress", western_space = false }
+    local n3 = {}
+    for i, c in ipairs({ 0x4E2D, 0x41 }) do
+        n3[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(n3), {}, off)
+    test_utils.assert_nil(
+        node.direct.get_attribute(n3[2], constants.ATTR_CJK_WESTERN_PREV),
+        "western-space=false 应关闭中西间距")
+end)
+
 test_utils.run_test("classify: P1 扩类归入 middle（行首禁则随类生效）", function()
     test_utils.assert_eq(punct.classify(0x00B7), "middle")  -- ·
     test_utils.assert_eq(punct.classify(0xFF5E), "middle")  -- ～

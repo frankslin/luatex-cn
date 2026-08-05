@@ -38,6 +38,7 @@
 \bool_new:N \l__luatexcn_punct_squeeze_bool
 \bool_new:N \l__luatexcn_punct_hanging_bool
 \bool_new:N \l__luatexcn_punct_kinsoku_bool
+\bool_new:N \l__luatexcn_punct_westernspace_bool
 \tl_new:N \l__luatexcn_punct_squeezemode_tl
 \tl_new:N \l__luatexcn_punct_adjacent_tl
 \tl_new:N \l__luatexcn_punct_linestartbracket_tl
@@ -63,6 +64,12 @@
     kinsoku .bool_set:N = \l__luatexcn_punct_kinsoku_bool,
     kinsoku .initial:n = {true},
     kinsoku .default:n = {true},
+
+    % clreq 中西间距：汉字与西文字母/数字间 1/4em（可挤 1/8、拉 1/2），
+    % 点号旁与夹注号内侧不加。仅 squeeze-mode=context（vbook 两类）生效。
+    western-space .bool_set:N = \l__luatexcn_punct_westernspace_bool,
+    western-space .initial:n = {true},
+    western-space .default:n = {true},
 
     % 与横排 (luatexcn/hori) 同名同值的整体风格预设：mainland | taiwan | none
     % （none = 不调整：既不挤压也不偏靠）。竖排与横排共用同一套预设词汇。
@@ -111,6 +118,8 @@
         adjacent_punct~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_adjacent_tl}]=],
         line_start_bracket~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_linestartbracket_tl}]=],
         line_end_punct~=~[=[\luaescapestring{\tl_use:N~\l__luatexcn_punct_lineendpunct_tl}]=],
+        western_space~=~\bool_if:NTF~\l__luatexcn_punct_westernspace_bool
+          {true}{false},
       })
     }
   }
@@ -153,6 +162,8 @@
     標點懸掛 .bool_set:N = \l__luatexcn_punct_hanging_bool,
     禁则 .bool_set:N = \l__luatexcn_punct_kinsoku_bool,
     禁則 .bool_set:N = \l__luatexcn_punct_kinsoku_bool,
+    中西间距 .bool_set:N = \l__luatexcn_punct_westernspace_bool,
+    中西間距 .bool_set:N = \l__luatexcn_punct_westernspace_bool,
   }
 
 \ExplSyntaxOff%

@@ -28,6 +28,7 @@ local punct_squeeze = require('shared.luatex-cn-punct-squeeze')
 local punct_anchors = require('shared.luatex-cn-punct-anchors')
 local adjust = require('shared.luatex-cn-adjust')
 local kinsoku = require('shared.luatex-cn-kinsoku')
+local cjk_western = require('shared.luatex-cn-cjk-western')
 local dbg = debug_mod.get_debugger('punct')
 
 -- clreq 挤压优先顺序的类别 → 序号（写进 ATTR_PUNCT_SHRINK_CLASS，
@@ -506,6 +507,9 @@ function punct.setup(cfg)
         _G.punct.line_start_bracket = cfg.line_start_bracket
     end
     if cfg.line_end_punct then _G.punct.line_end_punct = cfg.line_end_punct end
+    if cfg.western_space ~= nil then
+        _G.punct.western_space = cfg.western_space
+    end
 end
 
 -- ============================================================================
@@ -542,6 +546,8 @@ function punct.initialize(params, engine_ctx, plugin_contexts)
         adjacent_punct = (_G.punct and _G.punct.adjacent_punct) or "1.5",
         line_start_bracket = (_G.punct and _G.punct.line_start_bracket) or "trim",
         line_end_punct = (_G.punct and _G.punct.line_end_punct) or "compress",
+        -- clreq 中西间距（1/4em）。默认开；只在 context 挡位实际生效
+        western_space = not (_G.punct and _G.punct.western_space == false),
     }
 
     dbg.log(string.format(
@@ -712,6 +718,31 @@ local function annotate_rigid_units(seq)
     return count
 end
 
+--- 中西间距标注（clreq：汉字与西文字母/数字间加不多于 1/4 汉字宽的间距，
+-- 点号旁与夹注号内侧不加——规则本体在 shared/luatex-cn-cjk-western.lua，
+-- 与横排 hori-spacing 同一份）。仅 context 挡位（vbook 两类）生效，
+-- `western-space=false` 可关；ltc-guji（legacy）版面零变化。
+-- 脚注标号组不参与：标号与被注文字的间距由 marker 预处理管。
+-- @param seq (table) {{node, char, punct}, ...}
+-- @return (number) 标注的边界数
+local function annotate_cjk_western(seq, ctx)
+    if ctx.squeeze_mode ~= "context" or ctx.western_space == false then
+        return 0
+    end
+    local count = 0
+    for i = 2, #seq do
+        local a, b = seq[i - 1], seq[i]
+        local am = D.get_attribute(a.node, constants.ATTR_FOOTNOTE_MARKER)
+        local bm = D.get_attribute(b.node, constants.ATTR_FOOTNOTE_MARKER)
+        if not (am and am > 0) and not (bm and bm > 0)
+            and cjk_western.takes_spacing(a.char, b.char) then
+            D.set_attribute(b.node, constants.ATTR_CJK_WESTERN_PREV, 1)
+            count = count + 1
+        end
+    end
+    return count
+end
+
 --- Flatten stage: classify punctuation and replace vertical quotes
 -- @param head (node) The node list head
 -- @param params (table) Parameters
@@ -825,11 +856,13 @@ function punct.flatten(head, params, ctx)
 
     local count_context = annotate_context_squeeze(seq, ctx)
     local count_rigid = annotate_rigid_units(seq)
+    local count_mixed = annotate_cjk_western(seq, ctx)
 
-    if count_classified > 0 or count_replaced > 0 then
+    if count_classified > 0 or count_replaced > 0 or count_mixed > 0 then
         dbg.log(string.format(
-            "punct flatten: classified=%d, quotes_replaced=%d, context_squeeze=%d, rigid=%d",
-            count_classified, count_replaced, count_context, count_rigid))
+            "punct flatten: classified=%d, quotes_replaced=%d, context_squeeze=%d, rigid=%d, cjk_western=%d",
+            count_classified, count_replaced, count_context, count_rigid,
+            count_mixed))
     end
 
     return D.tonode(d_head)

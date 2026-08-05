@@ -188,6 +188,17 @@ end)
 -- get_cell_height: punct_config parameter
 -- ============================================================================
 
+test_utils.run_test("get_cell_height: 横置字形字幅 = advance 宽度", function()
+    local constants = require("core.luatex-cn-constants")
+    local n = node.direct.new(node.id("glyph"))
+    node.direct.setfield(n, "font", 1)
+    node.direct.setfield(n, "width", 65536 * 7)   -- 拉丁字形 advance
+    node.direct.set_attribute(n, constants.ATTR_SIDEWAYS, 1)
+    local grid_h = 65536 * 14
+    test_utils.assert_eq(helpers.get_cell_height(n, grid_h, nil), 65536 * 7,
+        "旋转 90° 后沿列方向的长度就是 advance")
+end)
+
 test_utils.run_test("get_cell_height: punct mainland mode → half height for punctuation", function()
     local constants = require("core.luatex-cn-constants")
     local n = node.direct.new(node.id("glyph"))

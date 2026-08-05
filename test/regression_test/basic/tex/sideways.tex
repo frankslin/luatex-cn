@@ -1,0 +1,21 @@
+%% sideways.tex — clreq 直排中西混排：\横置（西文串顺时针旋转 90°）
+%% 【测试配置】ltc-cn-vbook + \横置{...}
+%% 旋转串应：字母连排成词（字幅 = advance、串内零字距）、共用一条竖直
+%% 基线（不随各字母 h/d 摇摆）、横向居中于列、与前后汉字有 1/4em
+%% 中西间距。对照：不加 \横置 的西文逐字直立入格（每字母一格）。
+\documentclass{ltc-cn-vbook}
+\setmainfont{TW-Kai}
+
+\begin{document}
+
+\begin{正文}
+天地玄黄，宇宙洪荒。
+
+引用\横置{LuaTeX}之名继续排版。
+
+年份\横置{2026}与长词\横置{Typography}混排。
+
+对照直立LuaTeX逐字入格。
+\end{正文}
+
+\end{document}

@@ -111,6 +111,21 @@ constants.ATTR_PUNCT_TRIM_START = luatexbase.attributes.cnverticalpuncttrimstart
 constants.ATTR_PUNCT_TRIM_END = luatexbase.attributes.cnverticalpuncttrimend or
     luatexbase.new_attribute("cnverticalpuncttrimend")
 
+-- 该字与**前一个字**之间是中西边界（clreq：汉字与西文字母/数字间加不多于
+-- 1/4 汉字宽的间距，可挤至 1/8、拉至 1/2；点号旁与夹注号内侧不加）。
+-- 1 = 是。flatten 按共享层 shared/luatex-cn-cjk-western.lua 判定（仅
+-- context 挡位），layout 的 inter_gap_desc 据此把 0.1em 基准字距换成
+-- 带 cjk_western 类的 1/4em 间距 gap。
+constants.ATTR_CJK_WESTERN_PREV = luatexbase.attributes.cnverticalcjkwestern or
+    luatexbase.new_attribute("cnverticalcjkwestern")
+
+-- 该字形属于「横置」西文串（clreq 直排中西混排配置之「顺时针旋转 90°」，
+-- \横置{...} 标记）。1 = 是。三处协同：字幅 = 字形 advance 宽度（旋转后
+-- 沿列方向的长度）、串内字距归零（字母连排成词）、渲染绕**基线**旋转
+-- （串内各字形共用同一条竖直基线——按各自墨心旋转会左右摇摆）。
+constants.ATTR_SIDEWAYS = luatexbase.attributes.cnverticalsideways or
+    luatexbase.new_attribute("cnverticalsideways")
+
 -- 该标点是可悬挂的点号（clreq 行尾点号悬挂，仅 hanging-punct=true 时标）。
 -- 1 = 是。与 TRIM_END 的区别：TRIM_END 只收回**空白**，悬挂让整个字幅
 -- （含墨迹）移出列内——落在列末时列高预算完全不含它，字形挂在版口之外。

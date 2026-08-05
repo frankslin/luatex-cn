@@ -18,6 +18,7 @@
 local punct_table = require("shared.luatex-cn-punct-table")
 local kinsoku = require("shared.luatex-cn-kinsoku")
 local punct_squeeze = require("shared.luatex-cn-punct-squeeze")
+local cjk_western = require("shared.luatex-cn-cjk-western")
 
 local M = {}
 
@@ -38,53 +39,11 @@ M.ADJUST_CLASS_CODES = {
 -- ============================================================================
 -- Character kind classification
 -- ============================================================================
+-- 分类与例外规则的本体在共享层 shared/luatex-cn-cjk-western.lua（P3 起
+-- 竖排也消费同一份），这里只保留同名入口。
 
-local function is_han(c)
-    return (c >= 0x4E00 and c <= 0x9FFF)      -- CJK Unified
-        or (c >= 0x3400 and c <= 0x4DBF)      -- Ext A
-        or (c >= 0xF900 and c <= 0xFAFF)      -- Compatibility
-        or (c >= 0x20000 and c <= 0x3FFFF)    -- Ext B+
-        or c == 0x3005 or c == 0x3007 or c == 0x303B  -- 々 〇 〻
-end
-
-local function is_fullwidth_alnum(c)
-    return (c >= 0xFF10 and c <= 0xFF19)      -- ０-９
-        or (c >= 0xFF21 and c <= 0xFF3A)      -- Ａ-Ｚ
-        or (c >= 0xFF41 and c <= 0xFF5A)      -- ａ-ｚ
-end
-
-local function is_latin(c)
-    return (c >= 0x41 and c <= 0x5A)
-        or (c >= 0x61 and c <= 0x7A)
-        or (c >= 0xC0 and c <= 0x24F and c ~= 0xD7 and c ~= 0xF7)
-end
-
-local function is_digit(c)
-    return c >= 0x30 and c <= 0x39
-end
-
---- Classify a codepoint for boundary decisions.
--- @param c (number) Unicode codepoint
--- @return (string) "cjk" | "cjk_punct" | "western" | "other"
-function M.kind(c)
-    local cls = punct_table.class_of(c)
-    if cls then
-        -- Inter-line marks have no inline advance; treat as other
-        if cls == "linemark" or cls == "emphasis" then return "other" end
-        return "cjk_punct"
-    end
-    if is_han(c) or is_fullwidth_alnum(c) then return "cjk" end
-    if is_latin(c) or is_digit(c) then return "western" end
-    return "other"
-end
-
--- clreq exception set for CJK–Western spacing: no spacing next to pause/stop
--- marks, after an opening bracket, or before a closing bracket.
-local function suppresses_western_spacing(c)
-    if punct_table.is_point(c) then return true end
-    local cls = punct_table.class_of(c)
-    return cls == "open" or cls == "close"
-end
+M.kind = cjk_western.kind
+local suppresses_western_spacing = cjk_western.suppresses
 
 -- ============================================================================
 -- Boundary decision
@@ -179,7 +138,8 @@ function M.boundary(prev, next_c, opts)
         local space_on = opts.cjk_latin_space
         if space_on == nil then space_on = DEFAULT_OPTS.cjk_latin_space end
         if space_on and not suppresses_western_spacing(cjk_char) then
-            glue = { width = 0.25, shrink = 0.125, stretch = 0.25,
+            local G = cjk_western.GLUE
+            glue = { width = G.width, shrink = G.shrink, stretch = G.stretch,
                      class = "cjk_western" }
         else
             glue = { width = 0, shrink = 0, stretch = 0, class = "fallback" }

@@ -1,0 +1,22 @@
+%% vert-mixed.tex — 直排中西混排的 clreq 断言用例（仅由 clreq_test.py 编译）
+%% ① 汉字与西文字母/数字边界加 1/4em 间距（基准字距 0.1em → 0.25em）
+%% ② 例外：点号旁、夹注号内侧不加
+%% ③ 数字串整体不拆（P2 刚性单元）且两端有中西间距
+\documentclass{ltc-cn-vbook}
+\setmainfont{TW-Kai}
+
+\begin{document}
+
+\begin{正文}
+天地玄黄，宇宙洪荒。
+
+中A中西文单个字母。
+
+共12个数字混排例。
+
+「A」夹注号内侧例外。
+
+引用\横置{LuaTeX}之名横置排。
+\end{正文}
+
+\end{document}
