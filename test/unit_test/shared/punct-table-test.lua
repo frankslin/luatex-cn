@@ -254,6 +254,15 @@ test_utils.run_test("legacy_type matches current engine classification", functio
     test_utils.assert_nil(pt.legacy_type(0x2047))
 end)
 
+test_utils.run_test("legacy_type: P1 扩类并入 middle（连接号/间隔号/分隔号）", function()
+    test_utils.assert_eq(pt.legacy_type(0xFF5E), "middle")  -- ～ 连接号
+    test_utils.assert_eq(pt.legacy_type(0x00B7), "middle")  -- · 间隔号
+    test_utils.assert_eq(pt.legacy_type(0x30FB), "middle")  -- ・ 间隔号
+    test_utils.assert_eq(pt.legacy_type(0x2027), "middle")  -- ‧ 间隔号 (Big5)
+    test_utils.assert_eq(pt.legacy_type(0x002F), "middle")  -- / 分隔号
+    test_utils.assert_eq(pt.legacy_type(0xFF0F), "middle")  -- ／ 分隔号
+end)
+
 test_utils.run_test("quote_convert: nesting depth and role preserved (clreq 引号体例)", function()
     -- 台式（先单后双）→ 简体弯引号（先双后单）：外层对外层、内层对内层
     test_utils.assert_eq(pt.quote_convert(0x300C, "curly"), 0x201C)  -- 「→“

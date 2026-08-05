@@ -601,6 +601,20 @@ local function annotate_context_squeeze(seq, ctx)
             local next_c = (not is_marker[i + 1]) and seq[i + 1]
                 and seq[i + 1].char or nil
             local plan = punct_squeeze.plan(prev_c, item.char, next_c, nil, opts)
+            -- 固定宽度扩类（clreq：中国大陆式间隔号占半个字宽）：不是可挤
+            -- 空白而是无条件的窄字幅，两侧各收一半保持墨迹居中，也不参与
+            -- 求解器（无 ATTR_PUNCT_BLANK，宽度不可再调）。只对全角形式
+            -- 生效——interpunct 类中仅 · 的 mainland 宽度 < 1；connector/
+            -- solidus 的半宽成员（- – /）是比例西文字形，字幅语义不同，
+            -- 分类归 middle 但宽度不动。
+            if shared_punct.class_of(item.char) == "interpunct"
+                and plan.total == 0 then
+                local w = shared_punct.width_of(item.char, opts.style)
+                if w and w < 1 then
+                    plan.total = 1 - w
+                    plan.head = (1 - w) / 2
+                end
+            end
             D.set_attribute(item.node, constants.ATTR_PUNCT_SQUEEZE,
                 1 + math.floor(plan.total * 1000 + 0.5))
             D.set_attribute(item.node, constants.ATTR_PUNCT_SQUEEZE_HEAD,
@@ -637,6 +651,13 @@ local function annotate_context_squeeze(seq, ctx)
                     D.set_attribute(item.node, constants.ATTR_PUNCT_TRIM_END,
                         1 + math.floor(d_end * 1000 + 0.5))
                 end
+            end
+            -- clreq 行尾点号悬挂（可选，默认关）：点号落在列末时整个字幅
+            -- 移出列内。标记与 TRIM_END 同理由预算——「在不在列末」要等
+            -- 断列结果，flush_buffer 按位置取用。条件不含 blank_total：
+            -- 悬挂让墨迹也出列，与该标点有无可挤空白无关。
+            if ctx.hanging and shared_punct.is_point(item.char) then
+                D.set_attribute(item.node, constants.ATTR_PUNCT_HANG, 1)
             end
             count = count + 1
         end
@@ -776,9 +797,23 @@ function punct.flatten(head, params, ctx)
                 end
 
                 if ptype then
-                    local code = PUNCT_CODES[ptype]
-                    D.set_attribute(t, constants.ATTR_PUNCT_TYPE, code)
-                    count_classified = count_classified + 1
+                    -- P1 扩类（连接号/间隔号/分隔号）只在 context 挡位写
+                    -- ATTR_PUNCT_TYPE：该属性会把渲染切到「标点按字面居中」
+                    -- 路径，legacy 挡（ltc-guji 默认）须维持这些字符未分类
+                    -- 时代的落点（R5 版面零变化，judou 基线实测有差异）。
+                    -- 行首禁则不受此门控——kinsoku 走 punct.classify()，
+                    -- 不读该属性，扩类的禁则改进对所有挡位生效。
+                    local skip_attr = false
+                    if ctx.squeeze_mode ~= "context" then
+                        local cls = shared_punct.class_of(logical_char)
+                        skip_attr = cls == "connector" or cls == "interpunct"
+                            or cls == "solidus"
+                    end
+                    if not skip_attr then
+                        local code = PUNCT_CODES[ptype]
+                        D.set_attribute(t, constants.ATTR_PUNCT_TYPE, code)
+                        count_classified = count_classified + 1
+                    end
                 end
 
                 seq[#seq + 1] = { node = t, char = logical_char, punct = ptype ~= nil }
@@ -1154,6 +1189,7 @@ end
 punct._internal = {
     parse_tounicode = parse_tounicode,
     annotate_rigid_units = annotate_rigid_units,
+    annotate_context_squeeze = annotate_context_squeeze,
     resolve_original_codepoint = resolve_original_codepoint,
     get_ink_center_ratio = get_ink_center_ratio,
     INK_CENTER_CHARS = INK_CENTER_CHARS,

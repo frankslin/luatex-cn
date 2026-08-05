@@ -1,0 +1,18 @@
+%% emphasis-clreq.tex — clreq 5.3.1 着重号：实心圆点 + 标点上不加
+%% 【测试配置】ltc-cn-vbook（着重号 char=● / skip-punct=true）
+%% 上段带标点：逗号与句号上**不应**出现着重点，汉字上是实心圆点；
+%% 下段无标点作对照，每字都应有点。
+\documentclass{ltc-cn-vbook}
+\setmainfont{TW-Kai}
+
+\begin{document}
+
+\begin{正文}
+\着重号{天地玄黄，宇宙洪荒。}
+
+\着重号{日月盈昃辰宿列张}
+
+对照：\着重号[skip-punct=false]{甲乙，丙丁。}标点上也加点。
+\end{正文}
+
+\end{document}

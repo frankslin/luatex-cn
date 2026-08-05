@@ -415,6 +415,12 @@ local LEGACY_MAP = {
     question = "middle",
     dash = "nobreak",
     ellipsis = "nobreak",
+    -- P1 扩类：连接号/间隔号/分隔号并入 middle——竖排引擎对 middle 的处置
+    -- （行首禁则、满幅、legacy 不减半）与 clreq 对这三类的要求一致；
+    -- 三类各自的宽度/可挤空白差异由 width_of / space_info 按码位另行表达。
+    connector = "middle",
+    interpunct = "middle",
+    solidus = "middle",
 }
 
 --- Legacy six-type name for a codepoint (P1 migration helper).

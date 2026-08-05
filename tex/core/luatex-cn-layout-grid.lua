@@ -1699,6 +1699,12 @@ local function build_column_gaps(entries, grid_height)
         -- 刚性墨迹尺寸必须在扣除硬性收回**之前**定下：收回的是空白，
         -- 不是墨迹，扣多少都不该让刚性部分变大（否则字面会被整体推走）
         rigid[i] = ch - eh - et
+        -- clreq 行尾点号悬挂：列末点号整幅出列——墨迹与空白都不进列高
+        -- 预算，字形挂在版口之外。与 TRIM_END（只收空白）的区别就在这个
+        -- rigid 归零；两者叠加也无妨，都是把该字幅从预算里拿走。
+        if i == N and D.get_attribute(nd, constants.ATTR_PUNCT_HANG) then
+            rigid[i], eh, et = 0, 0, 0
+        end
         rigid_total = rigid_total + rigid[i]
         -- 列首的开始夹注符号、列末的点号：clreq 规定的收回是硬性的，不是
         -- 弹性余量，落在这两个位置就直接从空白里扣掉（设计 §2.3）

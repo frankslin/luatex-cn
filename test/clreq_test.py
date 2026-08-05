@@ -36,6 +36,8 @@ TAIWAN_TEX = os.path.join(
     REPO_ROOT, "test", "regression_test", "basic", "tex", "hori-taiwan.tex")
 VERTICAL_TEX = os.path.join(
     REPO_ROOT, "test", "clreq_test", "vert-punct.tex")
+HANGING_TEX = os.path.join(
+    REPO_ROOT, "test", "regression_test", "basic", "tex", "hanging-punct.tex")
 FONTS_DIR = os.path.join(REPO_ROOT, "test", "fonts")
 
 # 坐标/宽度舍入容差（em）。sp 取整与 PDF 三位小数远小于此。
@@ -818,6 +820,25 @@ def run_vertical_assertions(cols):
             f"「：」+「「」合计 1.5 字幅（冒号本身不可挤）：说→好 = {n:.3f}（期望 2.5）",
             abs(n - 2.5) < EPS)
 
+    # ---- ③ter P1 扩类：中国大陆式间隔号固定半字宽（clreq 附录 A：间隔号
+    #      GB 式占半个字宽），连接号 ～ 与全角分隔号 ／ 占满一字幅。
+    #      间隔号不是「可挤空白」而是无条件窄字幅，故夹在汉字之间也是 0.5。
+    ext = find_column(cols, "名词")
+    n = span_cells(ext, "词", "解")
+    r.check("扩类宽度",
+            f"中国大陆式间隔号「·」占半字幅：词→解 = {n:.3f} 字幅（期望 1.5）",
+            abs(n - 1.5) < EPS)
+
+    ext = find_column(cols, "范围")
+    n = span_cells(ext, "围", "连")
+    r.check("扩类宽度",
+            f"连接号「～」占满一字幅：围→连 = {n:.3f} 字幅（期望 2）",
+            abs(n - 2.0) < EPS)
+    n = span_cells(ext, "甲", "乙")
+    r.check("扩类宽度",
+            f"全角分隔号「／」占满一字幅：甲→乙 = {n:.3f} 字幅（期望 2）",
+            abs(n - 2.0) < EPS)
+
     # ---- ④ 挤压方向（clreq: 收回的是哪一侧的空白，字面就往哪边让）
     #      中国大陆式点号的空白在末端 → 收回后字面**不动**，让后一个符号上移；
     #      开始夹注符号的空白在始端 → 收回后字面向后贴紧被夹注的内容。
@@ -925,14 +946,62 @@ def run_vertical_assertions(cols):
     return r
 
 
-def run_vertical_doc(name, tex, min_cols):
+def run_hanging_assertions(cols):
+    """clreq 行尾点号悬挂（hanging-punct.tex，直排 + punct-hanging=true）。
+
+    悬挂的可度量特征是**正文不因列末点号而被压缩**：点号整幅移出列内，
+    所以带悬挂点号的列，其汉字步长应与不带点号的普通列一致；而关闭悬挂
+    时该点号要挤进列内，整列字距被压缩（负对照见回归用例的两版对比）。
+    第二条断言点号自身确实落在正文区域**之外**——它的基线低于同列末字
+    应有的位置一个字幅以上。
+    """
+    r = Reporter()
+
+    body = [c for c in cols if c.text.startswith("一二三")]
+    if not body:
+        raise SystemExit("悬挂用例：找不到正文列")
+
+    # 每列取前若干汉字的平均步长；悬挂列与非悬挂列应一致
+    def mean_step(col, n=8):
+        return sum(col.step_em(i) for i in range(n)) / n
+
+    hang = [c for c in body if c.text.rstrip()[-1] in "，。"]
+    plain = [c for c in body if c.text.rstrip()[-1] not in "，。"]
+    r.check("行尾悬挂", f"扫到 {len(hang)} 列以点号收尾（应 ≥ 1）", len(hang) >= 1)
+
+    if hang and plain:
+        hs = [mean_step(c) for c in hang]
+        ps = [mean_step(c) for c in plain]
+        ref = sum(ps) / len(ps)
+        worst = max(abs(s - ref) for s in hs)
+        r.check("行尾悬挂",
+                f"悬挂列的汉字步长未被压缩：{worst:.4f}em 偏差（基准 {ref:.3f}em）",
+                worst < EPS,
+                f"hang={[round(s,3) for s in hs]} plain={[round(s,3) for s in ps]}")
+
+    # 悬挂点号自身的字幅为 0（整幅出列），故末字→点号的步长只剩「末字字幅
+    # + 字距」再减去点号的字面偏靠位移，明显短于一个字幅；关闭悬挂时点号
+    # 占一个正常字幅，该步长 ≈ 1.0（实测 0.77 vs 1.04，故判据取 < 0.9——
+    # 负对照下这条必须失败，否则断言没有区分力）。
+    for c in hang[:2]:
+        i = len(c.glyphs) - 1
+        step = c.step_em(i - 1)
+        r.check("行尾悬挂",
+                f"列末点号「{c.glyphs[i][0]}」自身字幅归零：末字→点号 = "
+                f"{step:.3f} 字幅（应 < 0.9；不悬挂时 ≈ 1.0）",
+                step < 0.9, f"列 = …{c.text[-6:]}")
+
+    return r
+
+
+def run_vertical_doc(name, tex, min_cols, assert_fn=None):
     with tempfile.TemporaryDirectory() as tmp:
         pdf = compile_tex(tex, tmp)
         cols = parse_pdf_vertical(pdf)
     if len(cols) < min_cols:
         raise SystemExit(f"{name}: 解析出的列数过少（{len(cols)}），解析可能失败")
     print(f"\n=== {name}：解析到 {len(cols)} 列 ===")
-    return run_vertical_assertions(cols)
+    return (assert_fn or run_vertical_assertions)(cols)
 
 
 def run_doc(name, tex, assert_fn, min_lines):
@@ -962,6 +1031,8 @@ def main():
             run_doc("hori-taiwan.tex 台式用例", TAIWAN_TEX,
                     run_taiwan_assertions, 8),
             run_vertical_doc("vert-punct.tex 直排用例", VERTICAL_TEX, 4),
+            run_vertical_doc("hanging-punct.tex 行尾悬挂用例", HANGING_TEX, 4,
+                             run_hanging_assertions),
         ]
 
     passed = sum(r.passed for r in reporters)

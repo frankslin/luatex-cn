@@ -587,6 +587,59 @@ test_utils.run_test("flatten: 开始夹注符号跟在标点后收回始端半�
     test_utils.assert_eq(r[2].head, 0.5, "夹注符号的空白在始端，应全部记在始端")
 end)
 
+-- P1 扩类：间隔号 · 中国大陆式固定半字宽（clreq 附录 A：间隔号 GB 式
+-- 占半个字宽）。不是可挤空白而是无条件窄字幅：两侧各收 0.25 保持墨迹
+-- 居中，且不写 ATTR_PUNCT_BLANK（宽度不可再被求解器调整）。
+test_utils.run_test("flatten: 间隔号中国大陆式固定半字宽、墨迹居中", function()
+    local constants = require("core.luatex-cn-constants")
+    local nodes = {}
+    for i, c in ipairs({ 0x5B57, 0x00B7, 0x5B57 }) do
+        nodes[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(nodes), {}, CONTEXT_CTX)
+    local total = node.direct.get_attribute(nodes[2], constants.ATTR_PUNCT_SQUEEZE)
+    local head = node.direct.get_attribute(nodes[2], constants.ATTR_PUNCT_SQUEEZE_HEAD)
+    test_utils.assert_eq((total - 1) / 1000, 0.5, "· 应收回半字幅")
+    test_utils.assert_eq((head - 1) / 1000, 0.25, "两侧各收一半，墨迹保持居中")
+    test_utils.assert_nil(
+        node.direct.get_attribute(nodes[2], constants.ATTR_PUNCT_BLANK),
+        "固定宽度不是可挤空白，不得进求解器")
+end)
+
+test_utils.run_test("flatten: 间隔号台湾式满幅（宽度 1，不触发固定宽度分支）", function()
+    local ctx = { style = "taiwan", squeeze = true, squeeze_mode = "context",
+        adjacent_punct = "1.5", line_start_bracket = "trim",
+        line_end_punct = "compress" }
+    local r = flatten_chars({ 0x5B57, 0x00B7, 0x5B57 }, ctx)
+    test_utils.assert_eq(r[2].total, 0, "台湾式间隔号夹在汉字间占满一字幅")
+end)
+
+test_utils.run_test("flatten: legacy 挡不给扩类写 ATTR_PUNCT_TYPE（R5 版面零变化）", function()
+    local constants = require("core.luatex-cn-constants")
+    local ctx = { style = "mainland", squeeze = true, squeeze_mode = "legacy" }
+    local nodes = {}
+    for i, c in ipairs({ 0x5B57, 0x00B7, 0xFF5E, 0x3002 }) do
+        nodes[i] = test_utils.make_glyph(c, 1)
+    end
+    punct.flatten(test_utils.link_nodes(nodes), {}, ctx)
+    test_utils.assert_nil(
+        node.direct.get_attribute(nodes[2], constants.ATTR_PUNCT_TYPE),
+        "legacy 挡的 · 应维持未分类时代的渲染落点")
+    test_utils.assert_nil(
+        node.direct.get_attribute(nodes[3], constants.ATTR_PUNCT_TYPE),
+        "legacy 挡的 ～ 应维持未分类时代的渲染落点")
+    test_utils.assert_true(
+        node.direct.get_attribute(nodes[4], constants.ATTR_PUNCT_TYPE) ~= nil,
+        "非扩类标点（。）不受门控影响")
+end)
+
+test_utils.run_test("classify: P1 扩类归入 middle（行首禁则随类生效）", function()
+    test_utils.assert_eq(punct.classify(0x00B7), "middle")  -- ·
+    test_utils.assert_eq(punct.classify(0xFF5E), "middle")  -- ～
+    test_utils.assert_eq(punct.classify(0xFF0F), "middle")  -- ／
+    test_utils.assert_true(punct.is_line_start_forbidden("middle"))
+end)
+
 test_utils.run_test("flatten: 脚注标号组内的括号不参与宽度调整", function()
     local constants = require("core.luatex-cn-constants")
     -- ，︻一︼ ——「，」与标号的开括号相邻，但标号组的字幅由 marker 预处理

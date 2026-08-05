@@ -38,4 +38,27 @@ test_utils.run_test("clear_registry: clears all entries", function()
     test_utils.assert_nil(decorate.get(id))
 end)
 
+-- ============================================================================
+-- clreq 5.3.1「标点符号上不加着重号」
+-- ============================================================================
+-- \EmphasisMark 在 skip-punct 开启时逐字调用此判定；判定的是**基字**，
+-- 与装饰字符无关。分类走共享标点表，与横排 hori-linemark 同一口径。
+
+test_utils.run_test("is_punct_char: 标点为真、汉字与西文为假", function()
+    test_utils.assert_true(decorate.is_punct_char("，"))
+    test_utils.assert_true(decorate.is_punct_char("。"))
+    test_utils.assert_true(decorate.is_punct_char("："))
+    test_utils.assert_true(decorate.is_punct_char("「"))
+    test_utils.assert_true(decorate.is_punct_char("—"))
+    test_utils.assert_true(decorate.is_punct_char("·"))   -- P1 扩类
+    test_utils.assert_true(not decorate.is_punct_char("天"))
+    test_utils.assert_true(not decorate.is_punct_char("A"))
+end)
+
+test_utils.run_test("is_punct_char: 非法输入不抛错", function()
+    test_utils.assert_true(not decorate.is_punct_char(""))
+    test_utils.assert_true(not decorate.is_punct_char(nil))
+    test_utils.assert_true(not decorate.is_punct_char(42))
+end)
+
 print("\nAll decorate/decorate-test tests passed!")
