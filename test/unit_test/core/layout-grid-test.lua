@@ -631,6 +631,35 @@ test_utils.run_test("build_column_gaps: 标点的弹性空白升格为 gap，刚
         math.floor(EM * 0.8), 2)
 end)
 
+test_utils.run_test("build_column_gaps: 中西边界升格为 1/4em cjk_western gap", function()
+    -- clreq：汉字与西文间加 1/4em，可挤至 1/8、拉至 1/2；
+    -- 不参与兜底均分（1/2 是硬上限）
+    local second = entry(EM)
+    D.set_attribute(second.node, constants.ATTR_CJK_WESTERN_PREV, 1)
+    local col = layout_grid._internal.build_column_gaps({ entry(EM), second }, EM)
+    local inter = col.gaps[col.inter_idx[1]]
+    test_utils.assert_eq(inter.width, math.floor(EM * 0.25))
+    test_utils.assert_eq(inter.min, math.floor(EM * 0.125))
+    test_utils.assert_eq(inter.max, math.floor(EM * 0.5))
+    test_utils.assert_eq(inter.shrink_class, "cjk_western")
+    test_utils.assert_eq(inter.stretch_class, "cjk_western")
+    test_utils.assert_nil(inter.fallback)
+end)
+
+test_utils.run_test("calculate_buffer_height: 中西边界按 1/4em 估算", function()
+    -- 估算与求解器不同口径会让列尾早换（或晚换）一列
+    local gh = 65536 * 14
+    local function mk(attr)
+        local n = D.new(constants.GLYPH)
+        D.setfield(n, "char", 0x4E00)
+        if attr then D.set_attribute(n, constants.ATTR_CJK_WESTERN_PREV, 1) end
+        return { node = n, cell_height = gh }
+    end
+    test_utils.assert_eq(
+        layout_grid._internal.calculate_buffer_height({ mk(), mk(true) }),
+        2 * gh + math.floor(gh * 0.25))
+end)
+
 test_utils.run_test("build_column_gaps: 刚性单元边界上的三个 gap 全部锁死", function()
     -- clreq 符号分离禁则：两字幅标点等单元内部不得有任何伸缩，
     -- 横排的教训是只清 stretch 不清 shrink 会把单元压扁

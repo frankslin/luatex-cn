@@ -1548,6 +1548,20 @@ end
 -- @param col_buffer (table) Buffer of character entries
 -- @return (number) Total accumulated height in sp
 
+--- 估算用的相邻字距（sp），与 inter_gap_desc 的 width 同口径：两字幅
+-- 标点单元内部 0、中西边界 1/4em、其余 0.1em。估算与求解器不一致会让
+-- 列尾早换（或晚换）一列——#119 的教训。
+local function est_inter_gap_sp(prev_node, prev_ch, next_node)
+    if D.get_attribute(next_node, constants.ATTR_RIGID_PREV) == 2 then
+        return 0
+    end
+    if D.get_attribute(next_node, constants.ATTR_CJK_WESTERN_PREV) == 1 then
+        local em = get_node_font_size(prev_node) or prev_ch
+        return math.floor(em * 0.25)
+    end
+    return math.floor(prev_ch * GAP_RATIO)
+end
+
 local function calculate_buffer_height(col_buffer)
     if #col_buffer == 0 then return 0 end
     local total_height = 0
@@ -1555,12 +1569,8 @@ local function calculate_buffer_height(col_buffer)
         local ch = entry.cell_height or 0
         total_height = total_height + ch
         if i < #col_buffer then
-            -- 两字幅标点单元（—— …… ？！）内部无字距，与 inter_gap_desc 同口径；
-            -- 估算和求解器不一致会让列尾早换一列
-            local nxt = col_buffer[i + 1]
-            if D.get_attribute(nxt.node, constants.ATTR_RIGID_PREV) ~= 2 then
-                total_height = total_height + math.floor(ch * GAP_RATIO)
-            end
+            total_height = total_height
+                + est_inter_gap_sp(entry.node, ch, col_buffer[i + 1].node)
         end
     end
     return total_height
@@ -1648,6 +1658,18 @@ local function inter_gap_desc(entries, i, grid_height, locked, two_em)
         end
         if locked then
             return { width = base, min = base, max = base }
+        end
+        -- 中西边界（clreq）：0.1em 基准字距整段升格为 1/4em 中西间距，
+        -- 可挤至 1/8、拉至 1/2（不参与兜底均分——1/2 是硬上限）。
+        -- em 取边界前字字号（混排字号通常一致）；flatten 只在 context
+        -- 挡位打这个标记（shared/luatex-cn-cjk-western.lua 判定）。
+        if D.get_attribute(nxt.node, constants.ATTR_CJK_WESTERN_PREV) == 1 then
+            local em = get_node_font_size(e.node) or grid_height
+            return { width = math.floor(em * 0.25),
+                     min = math.floor(em * 0.125),
+                     max = math.floor(em * 0.5),
+                     shrink_class = "cjk_western",
+                     stretch_class = "cjk_western" }
         end
         return { width = base, min = 0, max = base,
                  shrink_class = "inter_char", fallback = true }
@@ -1932,12 +1954,13 @@ local function handle_glyph_node(t, ctx, col_buffer, layout_map, grid_height,
                 local col_start_y = #col_buffer > 0 and col_buffer[1].y_sp or 0
                 local buffer_height = calculate_buffer_height(col_buffer)
                 local next_y = col_start_y + buffer_height + cell_h
-                -- Add 0.1em gap for the character we're about to add
-                -- （两字幅标点单元内部无字距，同 calculate_buffer_height）
-                if #col_buffer > 0
-                        and D.get_attribute(t, constants.ATTR_RIGID_PREV) ~= 2 then
-                    local prev_ch = col_buffer[#col_buffer].cell_height or 0
-                    next_y = next_y + math.floor(prev_ch * GAP_RATIO)
+                -- Add the boundary gap for the character we're about to add
+                -- （两字幅单元 0 / 中西边界 1/4em / 其余 0.1em，
+                --   同 calculate_buffer_height）
+                if #col_buffer > 0 then
+                    local prev = col_buffer[#col_buffer]
+                    next_y = next_y
+                        + est_inter_gap_sp(prev.node, prev.cell_height or 0, t)
                 end
                 should_wrap = (next_y > ctx.col_height_sp)
             end

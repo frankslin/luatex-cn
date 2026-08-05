@@ -10,6 +10,7 @@ local tests = {
     "test/unit_test/shared/punct-squeeze-test.lua",
     "test/unit_test/shared/punct-anchors-test.lua",
     "test/unit_test/shared/ruby-metrics-test.lua",
+    "test/unit_test/shared/cjk-western-test.lua",
     "test/unit_test/shared/type-sizes-test.lua",
 
     -- Horizontal backend (clreq H1/H2/H3)

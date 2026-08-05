@@ -40,7 +40,7 @@
 
 ```bash
 texlua test/run_all.lua                  # 单元测试（43 个文件）
-python3 test/clreq_test.py               # clreq 度量断言（105 条，每条注明条款）
+python3 test/clreq_test.py               # clreq 度量断言（111 条，每条注明条款）
 python3 test/geometry_test.py            # 列内基线等距自校验
 python3 test/regression_test.py check    # 像素回归（basic/past_issue/complete）
 ```
@@ -56,8 +56,8 @@ python3 test/regression_test.py check    # 像素回归（basic/past_issue/compl
 | 后端 | 适用条款 | ✅ | 🟡/⚠️ | ❌ | 覆盖率 |
 |------|---------|----|-------|----|--------|
 | 横排 `luatex-cn-hori` | 43 | 29 | 5 | 9 | **≈ 73%** |
-| 竖排 `ltc-cn-vbook` / `ltc-tw-vbook` | 43 | 21 | 10 | 12 | **≈ 60%** |
-| 两后端合并 | 86 | 50 | 15 | 21 | **≈ 67%** |
+| 竖排 `ltc-cn-vbook` / `ltc-tw-vbook` | 43 | 21 | 11 | 11 | **≈ 62%** |
+| 两后端合并 | 86 | 50 | 16 | 20 | **≈ 67%** |
 
 百分比只是速览，**逐条状态与证据（下文各表）才是本文的声明本体**；
 条款等权也意味着它与工作量完成度（见差距分析第 7 节，按人日约 54%）不是
@@ -71,7 +71,7 @@ python3 test/regression_test.py check    # 像素回归（basic/past_issue/compl
 |------|------|------|------|------------|
 | 2.1.1 | 中文的行文模式（横排左起 / 直排右起换列向左） | ✅ | ✅ | 竖排网格引擎（`core/luatex-cn-layout-grid.lua`）；直排列右→左、页序右翻 |
 | 2.1.2 | 横直排差异点（标点直排形式、装订方向、页面镜像） | ➖ | 🟡 | vert 形替换 + PUA/tounicode 还原（`core/luatex-cn-core-punct.lua`）、`twoside` 镜像边距；个别标点直排形式依赖字体，缺字时对 `—`/`…` 退化为旋转 |
-| 2.1.3 | 直排的中、西文混排配置（全角直立 / 旋转 90° / 中横排） | ➖ | ❌ | 现仅逐字入格（近似直立）；`\填充文本框` 可手工近似中横排。规划 P3 |
+| 2.1.3 | 直排的中、西文混排配置（全角直立 / 旋转 90° / 中横排；汉字与西文间距） | ➖ | 🟡 | **中西间距已实现**（P3 第一步）：汉字与西文字母/数字边界 1/4em、可挤 1/8 拉 1/2、点号旁与夹注号内侧不加——规则本体 `shared/luatex-cn-cjk-western.lua` 与横排同源，`western-space` 键可关，仅 context 挡位生效；断言 6 条 + 负对照。三种西文配置：现仅逐字入格（近似直立），旋转 90° 与中横排未做 |
 | （2 章相关） | 双向文本（bidi） | 🚫 | 🚫 | 见第 10 节 |
 
 ## 2. 第 3 章 · 字形的变形与定位
@@ -132,7 +132,7 @@ python3 test/regression_test.py check    # 像素回归（basic/past_issue/compl
 | 6.3.2.1 | 标点符号的调整空间（字面分布与可调空白） | ✅ | ✅ | 墨心度量锚定 `shared/luatex-cn-punct-anchors.lua`（PR #138 中国大陆/台湾 × 横/竖全矩阵；#145 直排夹注号归上/下半格，图 30）。横排夹注号不锚为有意决定（第 9 节第 4 条）。断言「中国大陆式偏靠 Tm 右移 >0.2em」；回归 `bracket_ink_issue105.tex` |
 | 6.3.2.2 | 连续标点符号的调整（2 → 1.5 字宽，挤压方向） | ✅ | ✅ | `shared/luatex-cn-punct-squeeze.lua`（PR #132）；`adjacent-punct=1` 可收到 1 字宽；「空白在哪侧就往哪边让」；断言「连续标点 1.5 字幅 + 挤压方向」 |
 | 6.3.2.3 | 行首行尾标点挤压（行首开始夹注号半字、行末点号半字） | ✅ | ✅ | 横排 H2（行末标点 ≤ 半字宽为强制断言）；竖排 flatten 预算 `ATTR_PUNCT_TRIM_START/END`、flush 按断列结果取用（PR #143）；断言「行首夹注符号只占半字幅」 |
-| 6.3.3 | 横排的中、西文混排配置（1/4em，可挤 1/8、拉 1/2，三类例外） | ✅ | ➖ | `hori/luatex-cn-hori-spacing.lua`；断言「中西间距 ∈ [1/8, 1/2] em」「点号旁不加」「夹注号内侧不加」。直排的对应要求见 2.1.3（未实现） |
+| 6.3.3 | 横排的中、西文混排配置（1/4em，可挤 1/8、拉 1/2，三类例外） | ✅ | ➖ | `hori/luatex-cn-hori-spacing.lua`；断言「中西间距 ∈ [1/8, 1/2] em」「点号旁不加」「夹注号内侧不加」。直排的对应间距已实现，见 2.1.3 |
 | 6.4 | 基线、行高等 | 🟡 | 🟡 | 竖排格内垂直居中按 em 框基线对齐（#113，`geometry_test.py` 自校验）；横排交 TeX 行高模型；未逐条核对本节全部细则 |
 
 ## 6. 第 7 章 · 页面与书籍版式
