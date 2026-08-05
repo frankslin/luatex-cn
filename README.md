@@ -101,6 +101,20 @@ lualatex test.tex
 
 > 接下来请查看 **[Wiki 快速入门](https://github.com/open-guji/luatex-cn/wiki/Quick-Start)** 了解更多命令用法，或浏览 **[命令索引](https://github.com/open-guji/luatex-cn/wiki/Command-Reference)** 查看全部命令。
 
+### 排横排？同样一行开始
+
+```latex
+\documentclass{article}
+\usepackage{fontspec}
+\setmainfont{TW-Kai}
+\usepackage[style=taiwan]{luatex-cn}
+\begin{document}
+子曰：「學而時習之，不亦說乎？」本文以 LuaTeX 引擎排版，版本 1.18。
+\end{document}
+```
+
+标点宽度、行首行尾禁则、中西文间距等规则即刻生效，详见 [Wiki 横排页](https://github.com/open-guji/luatex-cn/wiki/Horizontal)。
+
 ## 功能特性
 
 | 功能 | 说明 | Wiki 文档 |
@@ -120,13 +134,15 @@ lualatex test.tex
 | **字体管理** | 跨平台自动探测、字体族递补（Fallback） | [字体设置](https://github.com/open-guji/luatex-cn/wiki/Fonts) |
 | **调试工具** | 网格可视化、坐标标尺、模块级日志 | [调试模式](https://github.com/open-guji/luatex-cn/wiki/Debug) |
 
-## 三个文档类
+## 一个宏包，四个文档类
 
-| 文档类 | 用途 | 示例 |
-|--------|------|------|
-| **`ltc-guji`** | 传统古籍排版（版心、鱼尾、丝栏） | `\documentclass{ltc-guji}` |
-| **`ltc-cn-vbook`** | 现代中国大陆竖排书籍 | `\documentclass{ltc-cn-vbook}` |
-| **`ltc-tw-vbook`** | 现代台湾竖排书籍 | `\documentclass{ltc-tw-vbook}` |
+| 入口 | 用途 |
+|------|------|
+| **`\usepackage{luatex-cn}`** | 现代横排——配合 article 等任意标准文档类使用 |
+| **`\documentclass{ltc-guji}`** | 传统古籍排版（版心、鱼尾、丝栏），写语义命令、引擎自动排版 |
+| **`\documentclass{ltc-guji-digital}`** | 古籍数字化录入——每行源码即一列，精确复刻原书版面 |
+| **`\documentclass{ltc-cn-vbook}`** | 现代竖排书籍，中国大陆式标点 |
+| **`\documentclass{ltc-tw-vbook}`** | 现代竖排书籍，台湾式标点 |
 
 > 所有命令都支持简体、繁体中文名称。例如 `\夹注{...}`、`\侧批{...}`、`\begin{正文}`。
 
@@ -146,8 +162,6 @@ lualatex test.tex
 \end{document}
 ```
 
-。
-
 ## 系统要求
 
 - LuaTeX（推荐 TeX Live 2024+）
@@ -156,9 +170,9 @@ lualatex test.tex
 
 ## 路线图
 
-- **已完成**：古籍竖排，版心，夹注，侧批，眉批，脚注，印章，句读，改字，现代标点系统，模板系统等
-- **v0.2.x**：完善现代繁体竖排，完整排版更多古籍
-- **v0.3.0**：完善文档体系，支持简繁命令，准备更大范围推广
+- **已完成**：古籍竖排全套（版心、夹注、批注、句读、印章、表格、工尺谱等）、数字化录入模式、现代竖排两套标点体例、横排 clreq 管道与统一入口
+- **进行中（v0.4.x）**：clreq 符合度持续提升——目前横排约 73%、竖排约 63%，逐条状态见[符合度矩阵](docs/CLREQ-CONFORMANCE.md)
+- **后续**：注音符号（拼音／注音的竖排标注）、标题与页面层条款、注释符号的分离禁则等
 
 ## 文档与社区
 
