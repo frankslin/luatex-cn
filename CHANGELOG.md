@@ -30,6 +30,7 @@
 - test/run_all.lua 失败漏报 — LuaTeX 的 os.execute 返回原始状态数字而非布尔值，此前任何单元测试失败都会被统计为通过 (#121)
 
 变更：
+- 竖排实现行尾点号悬挂（clreq 6.1.3）— \标点设置{punct-hanging=true}（中文别名 标点悬挂）开启后，落在列末的点号整幅移出列内、挂在版口之外，列内正文不再因它被压缩；clreq 注明悬挂正适用于直排（横排港台式点号居中不宜）。默认关，既有 vbook 文档版面不变。断言 3 条含负对照（关闭开关后同一列字距被压缩，断言确实失败）
 - 竖排派生连接号/间隔号/分隔号扩类（clreq P1）— 共享表 LEGACY_MAP 补三类到 middle，竖排随之认其行首禁则；中国大陆式间隔号占半个字宽（clreq 附录 A GB 式）作为无条件窄字幅，两侧各收一半保持墨迹居中。按文档类分档：扩类在 squeeze-mode=legacy 下不写 ATTR_PUNCT_TYPE，ltc-guji 版面零变化
 - 竖排着重号达标 clreq 5.3.1 — ltc-cn-vbook / ltc-tw-vbook 的 cfg 配 \着重号设置{char=●, skip-punct=true}：实心圆点、标点上不加着重号（判定走共享标点表，与横排 \着重 同一口径）；ltc-guji 保持古籍圈点体例（空心 ○、标点也圈）。新增 \着重号 的 char / scale / skip-punct 三个键与中文别名；回归用例 emphasis-clreq.tex 含 skip-punct=false 负对照
 - 竖排接入共享行内调整求解器（clreq P2）— flush_buffer 的三分支经验策略改为挤压 7 级 / 拉伸 2 级 + 兜底均分求解：标点字面空白升格为带优先级的 gap、字距列为最后手段；禁则「挤进/推出」决策上移共享层 kinsoku.resolve_overflow，两个候选各解一次求解器后按词典序比价（尽量少动字距，对 clreq 字面「挤得进就挤进」的有意偏离已在差距分析注明）；行首夹注符号贴列首、行末点号半字的宽度调整随断列结果取用；只有写满换列的列才均排到列底；数字串/西文词/两字宽标点经 ATTR_RIGID_PREV 锁为刚性单元（符号分离禁则）。ltc-guji 三套基线零变化，vbook 六个用例基线重存并逐列核对 (#143)

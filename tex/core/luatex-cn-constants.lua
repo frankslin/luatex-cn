@@ -111,6 +111,13 @@ constants.ATTR_PUNCT_TRIM_START = luatexbase.attributes.cnverticalpuncttrimstart
 constants.ATTR_PUNCT_TRIM_END = luatexbase.attributes.cnverticalpuncttrimend or
     luatexbase.new_attribute("cnverticalpuncttrimend")
 
+-- 该标点是可悬挂的点号（clreq 行尾点号悬挂，仅 hanging-punct=true 时标）。
+-- 1 = 是。与 TRIM_END 的区别：TRIM_END 只收回**空白**，悬挂让整个字幅
+-- （含墨迹）移出列内——落在列末时列高预算完全不含它，字形挂在版口之外。
+-- clreq 注明悬挂适用于直排（横排港台式点号居中不宜），是本引擎的主场。
+constants.ATTR_PUNCT_HANG = luatexbase.attributes.cnverticalpuncthang or
+    luatexbase.new_attribute("cnverticalpuncthang")
+
 -- 该字与**前一个字**同属一个刚性单元（clreq 符号分离禁则：两字幅标点、
 -- 数字串、数字+单位、符号+数字、西文单词）。1 = 是。layout 阶段据此把该
 -- 边界上的字距与两侧标点空白全部锁死（不可伸、不可缩）。

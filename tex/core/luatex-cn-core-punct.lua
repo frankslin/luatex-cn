@@ -652,6 +652,13 @@ local function annotate_context_squeeze(seq, ctx)
                         1 + math.floor(d_end * 1000 + 0.5))
                 end
             end
+            -- clreq 行尾点号悬挂（可选，默认关）：点号落在列末时整个字幅
+            -- 移出列内。标记与 TRIM_END 同理由预算——「在不在列末」要等
+            -- 断列结果，flush_buffer 按位置取用。条件不含 blank_total：
+            -- 悬挂让墨迹也出列，与该标点有无可挤空白无关。
+            if ctx.hanging and shared_punct.is_point(item.char) then
+                D.set_attribute(item.node, constants.ATTR_PUNCT_HANG, 1)
+            end
             count = count + 1
         end
     end
