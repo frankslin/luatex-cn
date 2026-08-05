@@ -1,4 +1,4 @@
-% 论辩的魂灵.tex - luatex-cn-hori 横排现代中文示例
+% 论辩的魂灵.tex - \usepackage{luatex-cn} 横排现代中文示例
 %
 % 鲁迅《論辯的魂靈》，一九二五年三月九日刊《語絲》週刊，後收入《華蓋集》。
 % 文本取自维基文库（作者 1936 年逝世，属公有领域）。
@@ -21,7 +21,7 @@
 % 说明框内的西文用 EB Garamond（TeX Live 自带），与楷体搭配
 \newfontfamily\garamond{EB Garamond}[Scale=1.06]
 \newcommand\en[1]{{\garamond #1}}
-\usepackage[style=taiwan]{luatex-cn-hori}
+\usepackage[style=taiwan]{luatex-cn}
 \usepackage{xcolor}
 \linespread{1.6}
 \pagestyle{empty}
@@ -37,7 +37,7 @@
 \noindent\setlength{\fboxsep}{0.8em}%
 \colorbox{yellow!14!orange!6}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{%
   \kaiti\small\setlength{\parindent}{0pt}\color{black!75}%
-  【排版說明】正文採用思源宋體 \en{TC}，標題與本框採用 \en{TW-Kai} 楷體，西文採用 \en{EB Garamond}；採用 \en{luatex-cn-hori} 橫向排版，並使用 \en{style=taiwan}（臺灣式置中標點）；其餘採用預設設定──基本級禁則、連續標點縮減一點五字寬、行首與行尾標點擠壓、避免段末孤字；文末落款採右對齊（\en{last-line} 選項）。}}
+  【排版說明】正文採用思源宋體 \en{TC}，標題與本框採用 \en{TW-Kai} 楷體，西文採用 \en{EB Garamond}；採用 \en{luatex-cn} 橫向排版，並使用 \en{style=taiwan}（臺灣式置中標點）；其餘採用預設設定──基本級禁則、連續標點縮減一點五字寬、行首與行尾標點擠壓、避免段末孤字；文末落款採右對齊（\en{last-line} 選項）。}}
 \vspace{0.8em}
 
 二十年前到黑市，買得一張符，名叫「鬼畫符」。雖然不過一團糟，但帖在壁上看起來，卻隨時顯出各樣的文字，是處世的寶訓，立身的金箴。今年又到黑市去，又買得一張符，也是「鬼畫符」。但帖了起來看，也還是那一張，並不見什麼增補和修改。今夜看出來的大題目是「論辯的魂靈」；細注道：「祖傳老年中年青年『邏輯』扶乩滅洋必勝妙法太上老君急急如律令敕」。今謹摘錄數條，以公同好——
