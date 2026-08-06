@@ -69,8 +69,10 @@ jobs:
 
       - name: Prepare release asset
         run: |
+          # 带上 doc/（wiki PDF 手册）：手动安装后放入 texmf 文档树，
+          # texdoc luatex-cn 才能弹出 PDF（fix #102）
           cd out/luatex-cn
-          zip -r ../../luatex-cn-tex-${{ github.ref_name }}.zip tex/
+          zip -r ../../luatex-cn-tex-${{ github.ref_name }}.zip tex/ doc/
           cd ../..
 
       - name: Extract changelog for this version

@@ -2,7 +2,7 @@
 
 本项目的所有重大更改都将记录在此文件中。
 
-## [未发布]
+## [0.4.0] - 2026-08-06
 
 新增：
 - luatex-cn 统一入口 — \usepackage{luatex-cn} 现为本包全部行为的统一入口：默认加载横排 clreq 管道（选项原样透传，如 \usepackage[style=taiwan]{luatex-cn}）；\usepackage[vertical]{luatex-cn} 或给出 banxin / no-banxin 键时加载竖排 bundle（0.3.x 语义，老用法原样不变）；ltc-* 文档类之下加载则自动走竖排分支（全为 no-op，无害）。竖排 bundle 顺带补上缺失的 geometry 依赖（0.3.x 在 article 下本就无法编译）。luatex-cn-hori 降为内部实现名，仍可直接加载。两个横排回归用例改经统一入口编译，基线逐像素不变，兼作透传守卫
@@ -11,7 +11,7 @@
 - 横排行间标点与行间注 — \专名 / \书名号甲 / \着重（相邻标注两侧各缩 1/16em、标点上不加着重号、行距下限校验），\拼音 / \对照 词对齐标音 (#129)
 - 横排段落与页面级 — 段末孤字避免与页首页尾孤行控制、凸排与段落缩排环境、段末行四种对齐（left/center/right/justify）、号数字号 \字号（初号…八号，横竖排共享） (#131)
 - clreq 共享规则内核 tex/shared/ — clreq 附录标点全表（单一数据源）、一维优先级空间分配器、四级禁则模块，横竖排共用且为纯 Lua 纯函数，可 texlua 直接单测 (#125)
-- clreq 断言测试 test/clreq_test.py — 解析横排 PDF 内容流做度量断言，67 条覆盖中西间距、行首行尾禁则、符号分离禁则、两字宽标点、行末挤压与行间注对齐，含压力用例与负对照，已并入 CI (#128)
+- clreq 断言测试 test/clreq_test.py — 解析 PDF 内容流做度量断言（横排逐字形 x 坐标、直排按列基线距离），119 条覆盖中西间距、行首行尾禁则、符号分离禁则、两字宽标点、行末挤压、行间注对齐、直排标点字幅与 \横置 / \中横排 等，含压力用例与负对照，已并入 CI (#128)
 - 示例 论辩的魂灵（鲁迅）— 横排 clreq 管道实战文档
 - 免安装字体支持 — \设置字体族 接受注册表别名（如 {Jigmo} 自动展开为 Jigmo+Jigmo2）、字体文件名与路径（{fonts/MyFont.ttf}），系统已装则用系统的，否则按 ./fonts/ → 文档目录 → kpse（TEXMFHOME/OSFONTDIR）查找本地文件，均未找到时报错并提示下载脚本用法 (#123)
 - scripts/download_fonts.py 新增 --user（安装到 TEXMFHOME/fonts/truetype/luatex-cn/，免管理员权限、不进系统字体库）与 --dest DIR（放入文档项目目录），下载后可用 \setmainfont{文件名.ttf} 直接引用 (#122)

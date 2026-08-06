@@ -64,6 +64,7 @@ local translation_map = {
   ["石头记.pdf"] = "shitouji.pdf",
   ["首页展示"] = "homepage-showcase",
   ["史记卷六·现代"] = "shiji-juan6-modern",
+  ["史记卷十六·现代"] = "shiji-juan16-modern",
   ["卷十六.tex"] = "juan16.tex",
   ["卷十六.pdf"] = "juan16.pdf",
   ["四库全书简明目录"] = "siku-jianming-mulu",
@@ -80,6 +81,9 @@ local translation_map = {
   ["西厢记佳期.tex"] = "xixiangji-jiaqi.tex",
   ["西厢记佳期.pdf"] = "xixiangji-jiaqi.pdf",
   ["西厢记佳期-预览.png"] = "xixiangji-jiaqi-preview.png",
+  ["论辩的魂灵"] = "lunbian-de-hunling",
+  ["论辩的魂灵.tex"] = "lunbian-de-hunling.tex",
+  ["论辩的魂灵.pdf"] = "lunbian-de-hunling.pdf",
 }
 
 -- Check if string contains Chinese characters
@@ -601,7 +605,7 @@ cleanfiles = { "*.pdf", "*.zip", "*.aux", "*.log", "*.toc", "*.synctex.gz", "*.f
 -- CTAN metadata
 uploadconfig = {
   pkg     = module,
-  author  = "Sheldon Li",
+  author  = "Sheldon Li;Frank Lin",
   license = "apache-2.0",
   summary = "A LuaTeX based package to handle Chinese text typesetting.",
   topic   = { "chinese", "vertical-typesetting", "ancient-books" },

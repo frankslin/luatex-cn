@@ -119,6 +119,43 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9-]", "", name.lower().replace(" ", "-").replace(":", "-"))
 
 
+# TeX 家族词 → 经典 logo 样式。只处理正确大小写的整词
+# （lualatex、luatex-cn 等命令/包名是小写，不会命中；LuaTeX-CN 中的
+# LuaTeX 部分会被样式化，-CN 原样保留）。长词在前保证优先匹配。
+_TEX_E = 'T<span class="tex-e">e</span>X'
+_TEX_A = 'L<span class="tex-a">a</span>' + _TEX_E
+_LOGO_HTML = {
+    "LuaLaTeX": "Lua" + _TEX_A,
+    "LuaTeX": "Lua" + _TEX_E,
+    "XeLaTeX": "Xe" + _TEX_A,
+    "XeTeX": "Xe" + _TEX_E,
+    "pdfLaTeX": "pdf" + _TEX_A,
+    "pdfTeX": "pdf" + _TEX_E,
+    "LaTeX": _TEX_A,
+    "TeX": _TEX_E,
+}
+_LOGO_RE = re.compile(
+    r"(?<![A-Za-z])(" + "|".join(_LOGO_HTML) + r")(?![a-zA-Z])"
+)
+# 标签整体、pre/code 块整体作为分隔符保留，只改纯文本片段
+_HTML_TOKEN_RE = re.compile(
+    r"(<pre\b.*?</pre>|<code\b.*?</code>|<[^>]+>)", re.S
+)
+
+
+def texify_logos(html: str) -> str:
+    """把正文文本中的 TeX/LaTeX/LuaTeX 等换成 logo 样式 span。
+
+    跳过 <pre>/<code> 块与标签内部（属性值），避免命令行、
+    源码示例与链接地址被改写。
+    """
+    parts = _HTML_TOKEN_RE.split(html)
+    return "".join(
+        p if p.startswith("<") else _LOGO_RE.sub(lambda m: _LOGO_HTML[m.group(1)], p)
+        for p in parts
+    )
+
+
 def read_wiki_page(name: str) -> str:
     """Read a wiki markdown file, return its content."""
     path = WIKI_DIR / f"{name}.md"
@@ -201,6 +238,22 @@ h2 {
 
 h3 { font-size: 13pt; color: #444; margin-top: 18pt; }
 h4 { font-size: 11.5pt; color: #555; }
+
+/* TeX 家族 logo：E 下沉、LaTeX 的 A 上标缩小（经典排印样式）。
+   text-transform 保证复制/书签文本仍是 TeX/LaTeX 原拼写 */
+.tex-e {
+    text-transform: uppercase;
+    vertical-align: -0.45ex;
+    margin-left: -0.1667em;
+    margin-right: -0.125em;
+}
+.tex-a {
+    text-transform: uppercase;
+    font-size: 0.75em;
+    vertical-align: 0.27em;
+    margin-left: -0.36em;
+    margin-right: -0.15em;
+}
 
 code {
     font-family: "Cascadia Code", "Fira Code", "Source Code Pro", "Noto Sans Mono CJK SC", monospace;
@@ -379,7 +432,7 @@ def build_cover_html(is_zh: bool) -> str:
         return f"""
 <div class="cover">
 <h1>LuaTeX-CN 文档</h1>
-<p>— 高质量古籍排版宏包 —</p>
+<p>— 古籍版式复刻 · 遵循 clreq 的现代中文排版 —</p>
 <p>从 GitHub Wiki 自动生成</p>
 <p class="stamp">{stamp}</p>
 </div>
@@ -388,7 +441,7 @@ def build_cover_html(is_zh: bool) -> str:
         return f"""
 <div class="cover">
 <h1>LuaTeX-CN Documentation</h1>
-<p>— High-Quality Classical Chinese Typesetting —</p>
+<p>— Classical Page Replication · clreq-Conformant Modern Chinese —</p>
 <p>Auto-generated from GitHub Wiki</p>
 <p class="stamp">{stamp}</p>
 </div>
@@ -402,8 +455,11 @@ def build_pdf(chapters: list[tuple[str, str]], css: str, out_path: Path, is_zh: 
     # Collect valid slugs for cross-referencing
     valid_slugs = {slugify(name) for name, _ in chapters}
 
-    # Build HTML body
-    html_parts = [build_cover_html(is_zh), build_toc_html(chapters, is_zh)]
+    # Build HTML body（封面/目录也做 TeX logo 样式化）
+    html_parts = [
+        texify_logos(build_cover_html(is_zh)),
+        texify_logos(build_toc_html(chapters, is_zh)),
+    ]
 
     for i, (name, _display) in enumerate(chapters):
         slug = slugify(name)
@@ -416,7 +472,7 @@ def build_pdf(chapters: list[tuple[str, str]], css: str, out_path: Path, is_zh: 
         raw_md = convert_wiki_links(raw_md, valid_slugs)
 
         # Render markdown to HTML
-        body_html = md_parser.render(raw_md)
+        body_html = texify_logos(md_parser.render(raw_md))
 
         # Wrap in a chapter div with anchor
         html_parts.append(f'<div class="chapter" id="{slug}">\n{body_html}\n</div>')

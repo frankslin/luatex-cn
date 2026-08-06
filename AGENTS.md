@@ -223,7 +223,7 @@ Stage 3: Render Page  → 应用坐标、绘制 PDF
 | `update_changelog` | 更新 CHANGELOG |
 | `prepare-next-version` | 准备下一个补丁版本 |
 | `release_process` | 发布新版本流程 |
-| `update_wiki` | 发布后同步更新 GitHub Wiki |
+| `update_wiki` | 发布准备期间（打 tag 前）更新 GitHub Wiki 并生成 Wiki PDF |
 | `refactor` | 代码清理与重构 |
 | `cloc` | 统计代码行数 |
 | `compare-layouts` | 比较 Original 与 Digital TeX 的 layout 输出 |

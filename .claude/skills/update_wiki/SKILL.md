@@ -1,11 +1,21 @@
 ---
 name: update_wiki
-description: 发布新版本后同步更新 GitHub Wiki 文档（必须基于源代码实际查看编写）
+description: 发布准备期间（打 tag 前）同步更新 GitHub Wiki 文档（必须基于源代码实际查看编写）
 ---
 
 # 更新项目 Wiki
 
-每次发布新版本后，需要同步更新 GitHub Wiki 文档。
+每次发布新版本时，需要在**打 tag 之前**同步更新 GitHub Wiki 文档。
+
+## 在发布流程中的位置（时序很重要）
+
+CTAN 包内嵌 `文档/luatex-cn-wiki-{zh,en}.pdf`，CI 在 push tag 时立即打包，
+所以 Wiki 必须先于 tag 更新。完整时序见 `/release_process`：
+
+1. 发布准备 PR 已创建（版本号、CHANGELOG 定版）
+2. **本技能**：假定该 PR 已合并，按定稿内容更新 Wiki（Wiki 是独立仓库，直接推送）
+3. 基于新 Wiki 运行 `python3 文档/build_wiki_pdf.py` 生成 PDF，提交进同一个发布准备 PR
+4. 合并 PR，然后才打 tag
 
 ## 核心原则（必须遵守）
 
