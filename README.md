@@ -181,7 +181,8 @@ lualatex test.tex
 - **[示例](示例/README.md)** — 查看完整的排版源码
 - **[Issue](https://github.com/open-guji/luatex-cn/issues)** — 报告 Bug 或提出建议
 
-联系人: Sheldon Li | 邮件: sheldonli.dev@gmail.com
+联系人: Sheldon Li | 邮件: sheldonli.dev@gmail.com  
+联系人: Frank Lin | 邮件: ctan@linshuang.info
 
 ## 开发与测试
 

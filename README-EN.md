@@ -122,7 +122,8 @@ Punctuation widths, line-breaking rules and Chinese-Western spacing take effect 
 - **[Examples](示例/README.md)** — complete typeset sources
 - **[Issues](https://github.com/open-guji/luatex-cn/issues)** — bug reports and suggestions
 
-Maintainer: Sheldon Li | Email: sheldonli.dev@gmail.com
+Maintainer: Sheldon Li | Email: sheldonli.dev@gmail.com  
+Maintainer: Frank Lin | Email: ctan@linshuang.info
 
 ## Development
 

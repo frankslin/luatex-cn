@@ -605,7 +605,7 @@ cleanfiles = { "*.pdf", "*.zip", "*.aux", "*.log", "*.toc", "*.synctex.gz", "*.f
 -- CTAN metadata
 uploadconfig = {
   pkg     = module,
-  author  = "Sheldon Li",
+  author  = "Sheldon Li;Frank Lin",
   license = "apache-2.0",
   summary = "A LuaTeX based package to handle Chinese text typesetting.",
   topic   = { "chinese", "vertical-typesetting", "ancient-books" },
