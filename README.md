@@ -15,6 +15,35 @@ CTAN: [v0.4.0](https://ctan.org/pkg/luatex-cn) | GitHub Release: [v0.4.0](https:
 
 > **[Wiki 用户手册](https://github.com/open-guji/luatex-cn/wiki)** ｜ **[快速入门](https://github.com/open-guji/luatex-cn/wiki/Quick-Start)** ｜ **[命令索引](https://github.com/open-guji/luatex-cn/wiki/Command-Reference)** ｜ **[更新日志](https://github.com/open-guji/luatex-cn/wiki/Changelog)**
 
+## Abstract (English)
+
+**luatex-cn** is a LuaTeX package for typesetting Chinese in both horizontal and
+vertical writing modes, following the W3C *Requirements for Chinese Text Layout*
+(clreq), and for reproducing the page layout of classical Chinese books.
+
+`\usepackage{luatex-cn}` is the unified entry point. By default it sets
+horizontal Chinese text per clreq: CJK–Western spacing, punctuation width
+adjustment (Mainland China / Taiwan presets), four-level line-breaking
+prohibitions, priority-ordered intra-line compression and stretching, hanging
+punctuation, interlinear marks (proper-name / book-title / emphasis) and
+word-aligned pinyin ruby. The `[vertical]` option selects vertical typesetting,
+which implements the clreq mixed-script rules: 1/4 em CJK–Western spacing,
+sideways Western text, tate-chu-yoko (short runs set upright in one cell),
+emphasis dots, hanging line-final punctuation, and a shared intra-line
+adjustment solver. The classical document classes (`ltc-guji`) add banxin,
+interlinear notes, side and top annotations, seals, judou punctuation and ruled
+borders.
+
+Conformance is measured rather than claimed:
+[docs/CLREQ-CONFORMANCE.md](docs/CLREQ-CONFORMANCE.md) records the per-clause
+status of both writing directions, backed by 119 assertions that measure glyph
+coordinates in the output PDF. Fonts can be used without installation through a
+download script with an SHA-256-pinned manifest; font selection accepts registry
+aliases as well as font file paths. PDF manuals in Chinese and English ship in
+`doc/`, so `texdoc luatex-cn` works after installation.
+
+Compile with **`lualatex`**. Full English documentation: [README-EN.md](README-EN.md).
+
 ## 排版效果展示
 
 ### 古籍排版 - 四库全书·文渊阁本
@@ -58,7 +87,7 @@ CTAN: [v0.4.0](https://ctan.org/pkg/luatex-cn) | GitHub Release: [v0.4.0](https:
 
 ### 第二步：安装 luatex-cn
 
-推荐从 [GitHub Release](https://github.com/open-guji/luatex-cn/releases) 下载最新版本的 `luatex-cn-tex-v*.zip`，解压后将 `tex/` 下的内容放入：
+推荐从 [GitHub Release](https://github.com/open-guji/luatex-cn/releases) 下载最新版本的 `luatex-cn-v*.zip`，解压后将 `luatex-cn/tex/` 下的内容放入：
 
 ```
 ~/texmf/tex/latex/luatex-cn/          (macOS/Linux)

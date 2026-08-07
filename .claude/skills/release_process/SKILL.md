@@ -33,9 +33,12 @@ description: 发布新版本的工作流 (Workflow for releasing a new version)
   并把 `[未发布]` 定版为 `[X.Y.Z] - YYYY-MM-DD`
 - 可使用 `/prepare-next-version` 技能自动更新上述文件
 // turbo
-- **打包验证（必须执行）**：`l3build ctan`
-  检查生成的 `luatex-cn-ctan.zip` 是否包含所有必需文件、无中文文件名残留
-  （新增示例需在 `build.lua` 的 `translation_map` 补映射）
+- **打包验证（必须执行）**：`texlua build.lua ctan`
+  检查生成的 `luatex-cn-v<version>.zip`（即上传 CTAN 的文件，CI 也用同一份）：
+  - 解包后顶层是唯一目录 `luatex-cn/`，其下为 `README.md` + `tex/` + `doc/`
+    （CTAN 硬性要求：README.md 必须在顶层，不能只放在 `doc/` 下）
+  - 包含所有必需文件、无中文文件名残留
+    （新增示例需在 `build.lua` 的 `translation_map` 补映射）
 - 从 main 切出 `release/vX.Y.Z` 分支，提交以上改动，push 并创建发布准备 PR。
   **此时先不要合并**——等 Wiki PDF（第 4 步）加入后一起合并
 

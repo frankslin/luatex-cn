@@ -17,10 +17,11 @@ NC='\033[0m' # No Color
 
 echo -e "${YELLOW}=== Testing Downloaded Package ===${NC}"
 
-# Auto-detect latest luatex-cn-tex zip file
-DOWNLOAD_ZIP=$(ls -t "$DOWNLOAD_DIR"/luatex-cn-tex*.zip 2>/dev/null | head -1)
+# Auto-detect latest release zip (v0.4.0 起改名为 luatex-cn-v*.zip，
+# 兼容旧的 luatex-cn-tex-v*.zip)
+DOWNLOAD_ZIP=$(ls -t "$DOWNLOAD_DIR"/luatex-cn-v*.zip "$DOWNLOAD_DIR"/luatex-cn-tex*.zip 2>/dev/null | head -1)
 if [ -z "$DOWNLOAD_ZIP" ]; then
-    echo -e "${RED}Error: No luatex-cn-tex*.zip found in $DOWNLOAD_DIR${NC}"
+    echo -e "${RED}Error: No luatex-cn-v*.zip found in $DOWNLOAD_DIR${NC}"
     exit 1
 fi
 

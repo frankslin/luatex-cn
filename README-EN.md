@@ -45,7 +45,7 @@ More in the [examples directory](示例/README.md) and the [Wiki examples page](
 ## Quick start
 
 1. Install a TeX distribution — **TeX Live 2024+** recommended (see the [Wiki installation guide](https://github.com/open-guji/luatex-cn/wiki/EN:Installation)).
-2. Install luatex-cn: download `luatex-cn-tex-v*.zip` from [GitHub Releases](https://github.com/open-guji/luatex-cn/releases), extract the contents of `tex/` into `~/texmf/tex/latex/luatex-cn/` and run `texhash` — or install from CTAN (`tlmgr install luatex-cn`; the CTAN version may lag behind).
+2. Install luatex-cn: download `luatex-cn-v*.zip` from [GitHub Releases](https://github.com/open-guji/luatex-cn/releases), extract the contents of `luatex-cn/tex/` into `~/texmf/tex/latex/luatex-cn/` and run `texhash` — or install from CTAN (`tlmgr install luatex-cn`; the CTAN version may lag behind).
 3. Compile with **`lualatex`** (not `pdflatex` or `xelatex`).
 
 A first classical page:

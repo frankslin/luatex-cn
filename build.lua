@@ -20,9 +20,19 @@ docpkgdir             = "doc"
 sourcefiles           = { "**/*.sty", "**/*.cls", "**/*.lua", "**/*.cfg" }
 
 -- Documentation and example files (Chinese folders copied in ctan_hook)
+-- 只放包顶层文件；docs/ 下的说明文档在 finalize_ctan_docs 里并入 doc/，
+-- 避免上传包里同时出现 doc/ 与 docs/ 两个文档目录
 docfiles              = {
-  "README.md", "README-EN.md", "LICENSE", "VERSION", "INSTALL.md",
-  "docs/CLREQ-CONFORMANCE.md"
+  "README.md", "README-EN.md", "LICENSE", "VERSION"
+}
+
+-- 上传包（CTAN / GitHub Release）的顶层内容，相对 staging 根。
+-- CTAN 规定的结构：顶层目录 luatex-cn/，README.md 在顶层（不能只在 doc/ 下），
+-- 宏包源码在 tex/，文档在 doc/。
+-- 示例（example/，约 26 MB 的 PDF/PNG）只保留在 staging / ctan 分支里，不进上传包。
+local pkgfiles        = {
+  "README.md", "README-EN.md", "LICENSE", "VERSION",
+  "doc", "tex"
 }
 
 -- Exclude build and output directories
@@ -119,14 +129,20 @@ local function path_exists(path)
 end
 
 -- Check if path is a directory
+-- os.execute 的返回值随 Lua 版本而变：5.1 返回退出码 0，5.3+ 返回 true/nil,
+-- "exit", code。两种都要认，否则在新版 texlua 上 is_dir 永远为假，
+-- 打包时目录会被当成普通文件（cp 静默跳过，包里缺 tex/ 与 doc/）
+local function shell_ok(cmd)
+  local ok = os.execute(cmd)
+  return ok == true or ok == 0
+end
+
 local function is_dir(path)
   local sep = get_sep()
-  local cmd
   if sep == "\\" then
-    cmd = 'if exist "' .. path .. '\\*" (exit 0) else (exit 1)'
-    return os.execute(cmd) == 0
+    return shell_ok('if exist "' .. path .. '\\*" (exit 0) else (exit 1)')
   else
-    return os.execute('test -d "' .. path .. '"') == 0
+    return shell_ok('test -d "' .. path .. '"')
   end
 end
 
@@ -451,6 +467,123 @@ local function post_process_ctan(staging_path)
   print("\n=== Post-processing complete ===\n")
 end
 
+-- 整理 staging 里的文档目录，使其符合 CTAN 的结构要求：
+--   * docs/CLREQ-CONFORMANCE.md 并入 doc/（包内只留一个文档目录）
+--   * 删除 doc/README.md 等开发用文件 —— CTAN 要求 README.md 只出现在包顶层
+--   * 修正包内 README 中指向 docs/ 的相对链接
+local function finalize_ctan_docs(staging_path)
+  print("\n>>> Finalizing documentation layout...")
+  local sep = get_sep()
+  local doc_dir = join_path(staging_path, "doc")
+
+  if not is_dir(doc_dir) then
+    if sep == "\\" then
+      os.execute('mkdir "' .. doc_dir .. '" 2>nul')
+    else
+      os.execute('mkdir -p "' .. doc_dir .. '"')
+    end
+  end
+
+  -- docs/ 下的说明文档并入 doc/
+  local extra_docs = { "CLREQ-CONFORMANCE.md" }
+  for _, name in ipairs(extra_docs) do
+    local src = join_path("docs", name)
+    if path_exists(src) then
+      print("  Copying: " .. src .. " -> doc/" .. name)
+      copy_path(src, join_path(doc_dir, name))
+    end
+  end
+
+  -- 删除包内不需要的文件（doc/README.md 是「文档/」目录索引与生成说明，
+  -- 留着会让 CTAN 误认为这是宏包的 README）
+  local drop = {
+    join_path(staging_path, "docs"),
+    join_path(doc_dir, "README.md"),
+    join_path(doc_dir, "build_wiki_pdf.py"),
+    join_path(doc_dir, "wiki-pdf-stamp.json"),
+  }
+  for _, target in ipairs(drop) do
+    if is_dir(target) or path_exists(target) then
+      print("  Removing: " .. target)
+      remove_path(target)
+    end
+  end
+
+  -- README 里的 docs/CLREQ-CONFORMANCE.md 链接在包内应指向 doc/
+  for _, name in ipairs({ "README.md", "README-EN.md" }) do
+    local readme = join_path(staging_path, name)
+    local content = read_file(readme)
+    if content then
+      local updated = content:gsub("docs/CLREQ%-CONFORMANCE%.md", "doc/CLREQ-CONFORMANCE.md")
+      if updated ~= content then
+        print("  Rewriting docs/ links in " .. name)
+        write_file(readme, updated)
+      end
+    end
+  end
+end
+
+-- 从 staging 里挑出上传包的内容，组装成 <upload_dir>/luatex-cn/ 目录树。
+-- 之所以另建一份而不是直接压缩 staging：staging 还带着 example/（大体积示例），
+-- 那些不进上传包，但保留在 ctan 分支上方便浏览。
+local function build_upload_tree(staging_path, upload_dir)
+  print("\n>>> Assembling upload tree: " .. upload_dir)
+  local sep = get_sep()
+
+  if is_dir(upload_dir) then
+    remove_path(upload_dir)
+  end
+  local root = join_path(upload_dir, module)
+  if sep == "\\" then
+    os.execute('mkdir "' .. root .. '" 2>nul')
+  else
+    os.execute('mkdir -p "' .. root .. '"')
+  end
+
+  for _, item in ipairs(pkgfiles) do
+    local src = join_path(staging_path, item)
+    if is_dir(src) or path_exists(src) then
+      print("  Adding: " .. item)
+      copy_path(src, join_path(root, item))
+    else
+      print("  Skipping (absent): " .. item)
+    end
+  end
+
+  return root
+end
+
+-- 上传包结构自检：缺了这几项 CTAN 会打回
+local function verify_upload_tree(root)
+  print("\n>>> Verifying package structure...")
+  local required_dirs = { "tex", "doc" }
+  local required_files = { "README.md", "LICENSE" }
+  local ok = true
+
+  for _, name in ipairs(required_dirs) do
+    if not is_dir(join_path(root, name)) then
+      print("  [FAIL] missing directory: " .. module .. "/" .. name)
+      ok = false
+    end
+  end
+  for _, name in ipairs(required_files) do
+    if not path_exists(join_path(root, name)) then
+      print("  [FAIL] missing file: " .. module .. "/" .. name)
+      ok = false
+    end
+  end
+  if path_exists(join_path(root, "doc", "README.md")) then
+    print("  [FAIL] README.md must live at the top level only, not in doc/")
+    ok = false
+  end
+
+  if not ok then
+    print("\nCTAN package structure check failed. Aborting.")
+    os.exit(1)
+  end
+  print("  [OK] " .. module .. "/{README.md, tex/, doc/}")
+end
+
 -- Read version from VERSION file
 local function read_version()
   local f = io.open("VERSION", "r")
@@ -544,10 +677,19 @@ local function ctan_custom()
     os.execute('find "' .. staging_path .. '" \\( -name .DS_Store -o -name Thumbs.db -o -name "*.pyc" \\) -delete 2>/dev/null')
   end
 
+  -- Step 6.6: 文档目录整理（doc/ 归一，README.md 只留顶层）
+  finalize_ctan_docs(staging_path)
+
   -- Step 7: Create final zip
+  -- 上传包名必须是 luatex-cn-v<version>.zip：CTAN 用文件名判断包名，
+  -- 带别的中缀（如 -ctan- / -tex-）会被误读成另一个包
   print("\n>>> Creating CTAN archive...")
-  local zip_name = module .. "-ctan-v" .. version .. ".zip"
-  local zip_path = join_path(ctan_dir, zip_name)
+  local upload_dir = join_path("build", "distrib", "upload")
+  local upload_root = build_upload_tree(staging_path, upload_dir)
+  verify_upload_tree(upload_root)
+
+  local zip_name = module .. "-v" .. version .. ".zip"
+  local zip_path = join_path(upload_dir, zip_name)
 
   -- Remove old zip if exists
   if path_exists(zip_path) then
@@ -555,24 +697,25 @@ local function ctan_custom()
   end
 
   -- Create zip (platform-specific)
+  -- 压缩的是 <upload_dir>/luatex-cn 整个目录，解包后顶层就是 luatex-cn/
   if sep == "\\" then
     -- Windows: use PowerShell
     local ps_cmd = 'powershell -Command "Compress-Archive -Path \'' ..
-        staging_path .. '\' -DestinationPath \'' .. zip_path .. '\' -Force"'
+        upload_root .. '\' -DestinationPath \'' .. zip_path .. '\' -Force"'
     os.execute(ps_cmd)
   else
     -- Unix: use zip command
-    os.execute('cd "' .. ctan_dir .. '" && zip -r "' .. zip_name .. '" "' .. module .. '"')
+    os.execute('cd "' .. upload_dir .. '" && zip -r "' .. zip_name .. '" "' .. module .. '"')
   end
 
   -- Also copy to project root for convenience (with version in name)
-  local root_zip = module .. "-ctan-v" .. version .. ".zip"
+  local root_zip = zip_name
   if path_exists(root_zip) then
     remove_path(root_zip)
   end
   copy_path(zip_path, root_zip)
 
-  -- Also keep a symlink/copy with the generic name for backwards compatibility
+  -- Also keep a copy with the generic name for scripts that don't know the version
   local generic_zip = module .. "-ctan.zip"
   if path_exists(generic_zip) then
     remove_path(generic_zip)
@@ -582,8 +725,9 @@ local function ctan_custom()
   print("\n========================================")
   print("  CTAN Package Build Complete!")
   print("========================================")
-  print("Staging area: " .. staging_path)
-  print("Archive: " .. root_zip)
+  print("Staging area: " .. staging_path .. "  (含 example/，推送到 ctan 分支)")
+  print("Upload tree:  " .. upload_root)
+  print("Archive: " .. root_zip .. "  <- 上传 CTAN 用这个")
   print("Generic name: " .. generic_zip)
   print("")
 
