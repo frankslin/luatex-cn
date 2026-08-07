@@ -48,7 +48,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 fonts-noto-cjk
-          pip3 install --user markdown-it-py weasyprint
+          pip3 install --user markdown-it-py "weasyprint>=69" pillow pikepdf fonttools
 
       - name: Build PDFs
         if: steps.check.outputs.changed == 'true'

@@ -5,7 +5,7 @@ Consolidate luatex-cn.wiki markdown files into two PDF documents:
   - luatex-cn-wiki-en.pdf  (English documentation)
 
 Requirements:
-  pip install markdown-it-py weasyprint
+  pip install markdown-it-py "weasyprint>=69" pillow pikepdf fonttools
 
 Usage:
   python3 文档/build_wiki_pdf.py
@@ -16,11 +16,15 @@ import os
 import re
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 
 from markdown_it import MarkdownIt
+from PIL import Image
 from weasyprint import HTML
+from weasyprint.urls import URLFetcher, URLFetcherResponse
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -34,6 +38,181 @@ WIKI_DIR = Path(
     )
 )
 OUT_DIR = Path(__file__).resolve().parent  # 文档/
+
+# 单色（矢量轮廓）Noto Emoji：让 emoji 以字体子集嵌入 PDF。
+# 不加这个的话，Pango 回落到系统彩色 emoji 字体（macOS 的 Apple Color Emoji
+# 是 160px 位图），每个 emoji 都会变成一张 ~25 KB 的位图塞进 PDF。
+# URL 钉死在 google/fonts 的具体 commit 上，保证可复现；字体不入库，按需下载。
+#
+# 两个必要的曲折（缺一不可，详见 ensure_emoji_font / force_text_presentation）：
+#   1. fontconfig 的 generic 配置把「Noto Emoji」家族别名到 emoji 并 prefer
+#      系统彩色字体，@font-face 会被截胡 —— 所以改名成独有家族再注册；
+#   2. Pango 对 emoji 呈现形式的字符强制走系统 emoji 字体、无视 CSS 字体栈
+#      —— 所以正文里给 emoji 统一加文本呈现选择符 U+FE0E。
+EMOJI_FONT_URL = (
+    "https://raw.githubusercontent.com/google/fonts/"
+    "2d85e20401920891efb7cd6272d6339685df2820/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+)
+EMOJI_FONT_DL_PATH = OUT_DIR / "fonts" / "NotoEmoji.ttf"
+EMOJI_FONT_PATH = OUT_DIR / "fonts" / "LuaTeXCNEmoji.ttf"
+EMOJI_FAMILY = "LuaTeX-CN Emoji"
+
+# 预览图压缩参数：图片显示宽度最多为版面 45%（16cm × 45% ≈ 7.2cm），
+# 300 dpi 对应约 850px；截图/线稿类预览图用 64 色调色板肉眼无损。
+# 原图以原始分辨率（约 400–780 dpi）8bpc 全彩嵌入，是 PDF 体积的大头。
+IMG_MAX_WIDTH_PX = 850
+IMG_PALETTE_COLORS = 64
+
+
+def ensure_emoji_font() -> Path:
+    """下载单色 Noto Emoji，实例化并改名为独有家族名。
+
+    改名的原因：fontconfig 自带的 generic 别名把「Noto Emoji」映射到 emoji
+    家族并 prefer 系统彩色 emoji 字体（fc-match 'Noto Emoji' 会命中
+    Apple Color Emoji），以原名注册 @font-face 会被截胡。换成不在别名表里的
+    家族名后，@font-face 才真正生效。
+    """
+    if EMOJI_FONT_PATH.exists():
+        return EMOJI_FONT_PATH
+    EMOJI_FONT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not EMOJI_FONT_DL_PATH.exists():
+        print(f"Downloading Noto Emoji -> {EMOJI_FONT_DL_PATH}")
+        urllib.request.urlretrieve(EMOJI_FONT_URL, EMOJI_FONT_DL_PATH)
+
+    from fontTools.ttLib import TTFont
+    from fontTools.varLib.instancer import instantiateVariableFont
+
+    font = TTFont(EMOJI_FONT_DL_PATH)
+    if "fvar" in font:
+        instantiateVariableFont(font, {"wght": 400}, inplace=True)
+    for rec in font["name"].names:
+        # 1=family 3=unique-id 4=full-name 6=postscript-name 16=typographic-family
+        if rec.nameID in (1, 3, 4, 6, 16):
+            rec.string = (rec.toUnicode()
+                          .replace("Noto Emoji", EMOJI_FAMILY)
+                          .replace("NotoEmoji", EMOJI_FAMILY.replace(" ", "")))
+    font.save(EMOJI_FONT_PATH)
+    print(f"Emoji font ready: {EMOJI_FONT_PATH} (family: {EMOJI_FAMILY})")
+    return EMOJI_FONT_PATH
+
+
+# Emoji_Presentation=Yes 的字符（UTS #51）：Pango 会把它们切成 emoji run
+# 并强制使用系统 emoji 字体（无视 CSS 字体栈）。加上 U+FE0E 文本呈现
+# 选择符后按普通文本排版，才会用上面注册的矢量 emoji 字体。
+_EMOJI_DEFAULT_RE = re.compile(
+    "([\u231a\u231b\u23e9-\u23ec\u23f0\u23f3\u25fd\u25fe\u2614\u2615"
+    "\u2648-\u2653\u267f\u2693\u26a1\u26aa\u26ab\u26bd\u26be\u26c4\u26c5"
+    "\u26ce\u26d4\u26ea\u26f2\u26f3\u26f5\u26fa\u26fd\u2705\u270a\u270b"
+    "\u2728\u274c\u274e\u2753-\u2755\u2757\u2795-\u2797\u27b0\u27bf"
+    "\u2b1b\u2b1c\u2b50\u2b55\U0001f000-\U0001faff])(?!\ufe0e)"
+)
+
+
+def force_text_presentation(html: str) -> str:
+    """把 emoji 统一改为文本呈现：U+FE0F → U+FE0E，默认 emoji 呈现的补 U+FE0E。"""
+    html = html.replace("\ufe0f", "\ufe0e")
+    return _EMOJI_DEFAULT_RE.sub("\\1\ufe0e", html)
+
+
+def compress_image_bytes(raw: bytes) -> bytes | None:
+    """Downscale to ≤300 dpi at display size and quantize to a palette PNG."""
+    try:
+        im = Image.open(BytesIO(raw))
+        im.load()
+    except Exception as exc:
+        print(f"  WARNING: cannot decode image ({exc}), keeping original", file=sys.stderr)
+        return None
+    if im.width > IMG_MAX_WIDTH_PX:
+        im = im.resize(
+            (IMG_MAX_WIDTH_PX, max(1, round(im.height * IMG_MAX_WIDTH_PX / im.width))),
+            Image.LANCZOS,
+        )
+    if im.mode != "P":
+        if "A" in im.getbands():
+            # FASTOCTREE 是 Pillow 里唯一支持带 alpha 量化的方法
+            im = im.convert("RGBA").quantize(
+                colors=IMG_PALETTE_COLORS, method=Image.Quantize.FASTOCTREE)
+        else:
+            im = im.convert("RGB").quantize(
+                colors=IMG_PALETTE_COLORS, method=Image.Quantize.MEDIANCUT)
+    buf = BytesIO()
+    im.save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
+def palettize_pdf_images(pdf_path: Path) -> None:
+    """把 PDF 里的全彩图像流转成 64 色 Indexed 表示。
+
+    WeasyPrint 嵌入图像时一律把调色板 PNG 展开成 8bpc RGB（3 字节/像素），
+    fetcher 里做的量化只剩下降采样的作用。这里在 PDF 层面补回来：
+    每像素 1 字节索引 + 64×3 字节查找表，Flate 后体积约为 RGB 的 1/3。
+    """
+    import zlib
+
+    import pikepdf
+
+    before = pdf_path.stat().st_size
+    seen = set()
+    with pikepdf.open(pdf_path, allow_overwriting_input=True) as pdf:
+        for page in pdf.pages:
+            xobjects = page.obj.get("/Resources", {}).get("/XObject", {})
+            for _name, obj in xobjects.items():
+                key = (obj.objgen if hasattr(obj, "objgen") else None)
+                if key in seen:
+                    continue
+                seen.add(key)
+                if (obj.get("/Subtype") != "/Image"
+                        or obj.get("/ColorSpace") != "/DeviceRGB"
+                        or int(obj.get("/BitsPerComponent", 0)) != 8):
+                    continue
+                pil = pikepdf.PdfImage(obj).as_pil_image().convert("RGB")
+                pal = pil.quantize(
+                    colors=IMG_PALETTE_COLORS, method=Image.Quantize.MEDIANCUT)
+                palette = bytes(pal.getpalette()[:IMG_PALETTE_COLORS * 3])
+                n_colors = len(palette) // 3
+                obj.write(
+                    zlib.compress(pal.tobytes(), 9),
+                    filter=pikepdf.Name("/FlateDecode"))
+                obj.ColorSpace = pikepdf.Array([
+                    pikepdf.Name("/Indexed"), pikepdf.Name("/DeviceRGB"),
+                    n_colors - 1, pikepdf.Binary(palette) if hasattr(pikepdf, "Binary")
+                    else pikepdf.String(palette),
+                ])
+                obj.BitsPerComponent = 8
+                if "/DecodeParms" in obj:
+                    del obj.DecodeParms
+        pdf.save(pdf_path)
+    after = pdf_path.stat().st_size
+    print(f"  Palettized images: {before // 1024} KB -> {after // 1024} KB")
+
+
+_image_cache: dict[str, bytes] = {}
+_fetcher = URLFetcher(allow_redirects=True)
+
+
+def image_fetcher(url: str) -> URLFetcherResponse:
+    """WeasyPrint url_fetcher：位图一律先压缩再交给排版引擎。
+
+    首页展示等预览图在 zh/en 两份 PDF 里重复出现，按 URL 缓存压缩结果，
+    避免重复下载与重复量化。（WeasyPrint ≥ 69 的 URLFetcher API）
+    """
+    if url in _image_cache:
+        return URLFetcherResponse(
+            url, body=_image_cache[url], headers={"Content-Type": "image/png"})
+    resp = _fetcher.fetch(url)
+    mime = resp.headers.get_content_type()
+    if mime.startswith("image/") and mime != "image/svg+xml":
+        raw = resp.read()
+        resp.close()
+        compressed = compress_image_bytes(raw)
+        if compressed is None:
+            return URLFetcherResponse(url, body=raw, headers={"Content-Type": mime})
+        print(f"  Image {url.rsplit('/', 1)[-1]}: "
+              f"{len(raw) // 1024} KB -> {len(compressed) // 1024} KB")
+        _image_cache[url] = compressed
+        return URLFetcherResponse(
+            url, body=compressed, headers={"Content-Type": "image/png"})
+    return resp
 
 
 def git_head(repo_dir: Path) -> str:
@@ -256,7 +435,7 @@ h4 { font-size: 11.5pt; color: #555; }
 }
 
 code {
-    font-family: "Cascadia Code", "Fira Code", "Source Code Pro", "Noto Sans Mono CJK SC", monospace;
+    font-family: "Cascadia Code", "Fira Code", "Source Code Pro", "Noto Sans Mono CJK SC", "LuaTeX-CN Emoji", monospace;
     background: #f4f4f4;
     padding: 1px 4px;
     border-radius: 3px;
@@ -374,16 +553,27 @@ hr {
 }
 """
 
-CSS_ZH = CSS_COMMON + """
-body {
-    font-family: "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", "AR PL UMing CN", serif;
-}
+# emoji 字体排在 serif 关键字之前：主字体没有的 emoji 字符落到矢量 emoji
+# 字体（随子集嵌入），而不是继续回落到系统彩色 emoji 位图字体
+CSS_ZH = CSS_COMMON + f"""
+body {{
+    font-family: "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", "AR PL UMing CN", "{EMOJI_FAMILY}", serif;
+}}
 """
 
-CSS_EN = CSS_COMMON + """
-body {
-    font-family: "Noto Serif", "Georgia", "Times New Roman", serif;
-}
+CSS_EN = CSS_COMMON + f"""
+body {{
+    font-family: "Noto Serif", "Georgia", "Times New Roman", "{EMOJI_FAMILY}", serif;
+}}
+"""
+
+
+def build_font_css(emoji_font: Path) -> str:
+    return f"""
+@font-face {{
+    font-family: "{EMOJI_FAMILY}";
+    src: url("{emoji_font.resolve().as_uri()}");
+}}
 """
 
 
@@ -488,6 +678,7 @@ def build_pdf(chapters: list[tuple[str, str]], css: str, out_path: Path, is_zh: 
 </body>
 </html>
 """
+    full_html = force_text_presentation(full_html)
 
     # Write intermediate HTML for debugging (optional)
     html_path = out_path.with_suffix(".html")
@@ -495,7 +686,9 @@ def build_pdf(chapters: list[tuple[str, str]], css: str, out_path: Path, is_zh: 
 
     # Generate PDF
     print(f"  Generating {out_path.name} ...")
-    HTML(string=full_html, base_url=str(WIKI_DIR)).write_pdf(str(out_path))
+    HTML(string=full_html, base_url=str(WIKI_DIR),
+         url_fetcher=image_fetcher).write_pdf(str(out_path))
+    palettize_pdf_images(out_path)
     size_kb = out_path.stat().st_size / 1024
     print(f"  -> {out_path.name} ({size_kb:.0f} KB)")
 
@@ -514,12 +707,13 @@ def main():
         sys.exit(1)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    font_css = build_font_css(ensure_emoji_font())
 
     print("Building Chinese PDF ...")
-    build_pdf(ZH_CHAPTERS, CSS_ZH, OUT_DIR / "luatex-cn-wiki-zh.pdf", is_zh=True)
+    build_pdf(ZH_CHAPTERS, font_css + CSS_ZH, OUT_DIR / "luatex-cn-wiki-zh.pdf", is_zh=True)
 
     print("Building English PDF ...")
-    build_pdf(EN_CHAPTERS, CSS_EN, OUT_DIR / "luatex-cn-wiki-en.pdf", is_zh=False)
+    build_pdf(EN_CHAPTERS, font_css + CSS_EN, OUT_DIR / "luatex-cn-wiki-en.pdf", is_zh=False)
 
     # 生成 stamp：记录本次构建对应的 wiki/repo commit，
     # CI workflow 据此判断 wiki 是否有更新、需不需要重建

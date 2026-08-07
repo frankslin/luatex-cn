@@ -87,3 +87,6 @@ test/regression_test/*/diff
 
 # repo-local test fonts (downloaded by scripts/download_test_fonts.sh)
 test/fonts/
+
+# wiki PDF 构建用 emoji 字体（build_wiki_pdf.py 按需下载）
+文档/fonts/
