@@ -3,12 +3,19 @@
 本项目的所有重大更改都将记录在此文件中。
 
 ## [未发布]
+- （待填写）
+
+## [0.4.1] - 2026-08-07
 
 修复：
+- 批注/TextBox 中的西文不再被 TeX 预断行拆散（如 S-/tate）— TextBox 收集内容时 `\hsize` 统一为 `\c_max_dim`，断列全部交给网格引擎（col_limit 自动换列 + western_word 禁则）；grid 模式（ltc-guji 等固定格高）下 `\横置` 字幅改按 advance 计，整词可连排成词而非每字母占一格 (#50)
 - CTAN 上传包结构与命名按 CTAN 要求修正 — 发布资产改名 `luatex-cn-v<版本>.zip`（去掉 `-tex-` 中缀，避免被误读成另一个包）；解包后顶层为唯一目录 `luatex-cn/`，其下 `README.md` + `tex/` + `doc/`；`README.md` 只出现在顶层（`文档/README.md` 等开发用文件不再进包）；`docs/CLREQ-CONFORMANCE.md` 并入 `doc/` 并同步改写包内 README 链接，包里不再同时出现 `doc/` 与 `docs/`
 - README.md 增加英文摘要（CTAN 要求 README 含英文简介）
 - 发布资产改为直接使用 `build.lua ctan` 产出的压缩包，本地打包、CI 发布与上传 CTAN 的文件三者一致；CI 增加 tag/VERSION 一致性校验与包结构自检
 - `build.lua` 的 `is_dir` 兼容 Lua 5.1 与 5.3+ 两种 `os.execute` 返回值约定，避免新版 texlua 上目录被当成普通文件而漏打包
+
+文档：
+- wiki PDF 瘦身（zh 4.8→2.7 MB，en 4.3→1.8 MB）— 示例预览图降采样至 300 dpi 并以 64 色 Indexed 色彩空间嵌入；emoji 由系统彩色位图（每个约 25 KB）改为单色 Noto Emoji 矢量子集嵌入
 
 ## [0.4.0] - 2026-08-06
 
