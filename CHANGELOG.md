@@ -2,6 +2,14 @@
 
 本项目的所有重大更改都将记录在此文件中。
 
+## [未发布]
+
+修复：
+- CTAN 上传包结构与命名按 CTAN 要求修正 — 发布资产改名 `luatex-cn-v<版本>.zip`（去掉 `-tex-` 中缀，避免被误读成另一个包）；解包后顶层为唯一目录 `luatex-cn/`，其下 `README.md` + `tex/` + `doc/`；`README.md` 只出现在顶层（`文档/README.md` 等开发用文件不再进包）；`docs/CLREQ-CONFORMANCE.md` 并入 `doc/` 并同步改写包内 README 链接，包里不再同时出现 `doc/` 与 `docs/`
+- README.md 增加英文摘要（CTAN 要求 README 含英文简介）
+- 发布资产改为直接使用 `build.lua ctan` 产出的压缩包，本地打包、CI 发布与上传 CTAN 的文件三者一致；CI 增加 tag/VERSION 一致性校验与包结构自检
+- `build.lua` 的 `is_dir` 兼容 Lua 5.1 与 5.3+ 两种 `os.execute` 返回值约定，避免新版 texlua 上目录被当成普通文件而漏打包
+
 ## [0.4.0] - 2026-08-06
 
 新增：

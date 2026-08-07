@@ -38,7 +38,7 @@ jobs:
             geometry
 
       - name: Install system dependencies
-        run: sudo apt-get install -y zip
+        run: sudo apt-get install -y zip unzip
 
       - name: Build CTAN package
         run: |
@@ -69,11 +69,47 @@ jobs:
 
       - name: Prepare release asset
         run: |
-          # 带上 doc/（wiki PDF 手册）：手动安装后放入 texmf 文档树，
+          # 发布资产直接用 build.lua 打出来的上传包，不要在这里另起一个 zip：
+          # 本地 `texlua build.lua ctan` 与 CI、与上传 CTAN 的文件必须是同一个。
+          # 包内含 doc/（wiki PDF 手册）：手动安装后放入 texmf 文档树，
           # texdoc luatex-cn 才能弹出 PDF（fix #102）
-          cd out/luatex-cn
-          zip -r ../../luatex-cn-tex-${{ github.ref_name }}.zip tex/ doc/
-          cd ../..
+          set -euo pipefail
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} 与 VERSION 文件 (${VERSION}) 不一致"
+            exit 1
+          fi
+          ZIP="luatex-cn-v${VERSION}.zip"
+          if [ ! -f "$ZIP" ]; then
+            cp "build/distrib/upload/${ZIP}" .
+          fi
+          echo "Release asset: $ZIP"
+
+      - name: Verify CTAN package structure
+        run: |
+          # CTAN 的硬性要求：解包后顶层是唯一目录 luatex-cn/，
+          # README.md 在 luatex-cn/ 顶层（不能只在 doc/ 下），源码在 tex/、文档在 doc/
+          set -euo pipefail
+          ZIP="luatex-cn-${GITHUB_REF_NAME}.zip"
+          unzip -Z1 "$ZIP" > manifest.txt
+          cat manifest.txt
+          fail=0
+          for entry in "luatex-cn/README.md" "luatex-cn/tex/" "luatex-cn/doc/"; do
+            if [ "$(grep -cxF "$entry" manifest.txt || true)" -eq 0 ]; then
+              echo "::error::缺少 $entry"
+              fail=1
+            fi
+          done
+          if [ "$(grep -cv '^luatex-cn/' manifest.txt || true)" -ne 0 ]; then
+            echo "::error::存在 luatex-cn/ 之外的顶层条目"
+            fail=1
+          fi
+          if [ "$(grep -cxF 'luatex-cn/doc/README.md' manifest.txt || true)" -ne 0 ]; then
+            echo "::error::README.md 不应出现在 doc/ 下"
+            fail=1
+          fi
+          rm -f manifest.txt
+          exit $fail
 
       - name: Extract changelog for this version
         id: changelog
@@ -104,7 +140,7 @@ jobs:
         with:
           name: ${{ steps.changelog.outputs.title }}
           body: ${{ steps.changelog.outputs.body }}
-          files: luatex-cn-tex-${{ github.ref_name }}.zip
+          files: luatex-cn-${{ github.ref_name }}.zip
           draft: true
           prerelease: false
         env:

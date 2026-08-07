@@ -1,6 +1,6 @@
 #!/bin/bash
 # test_ctan_package.sh
-# 测试 CTAN 包 (luatex-cn-ctan.zip) 是否能正常工作
+# 测试 CTAN 包 (luatex-cn-v<version>.zip) 是否能正常工作
 # 与 test_downloaded_package.sh 类似，但适配 CTAN 包的不同结构
 
 set -e
@@ -8,7 +8,7 @@ set -e
 # Configuration
 PROJECT_DIR="/home/lishaodong/workspace/luatex-cn"
 VERSION=$(cat "$PROJECT_DIR/VERSION" | tr -d '[:space:]')
-CTAN_ZIP="$PROJECT_DIR/luatex-cn-ctan-v${VERSION}.zip"
+CTAN_ZIP="$PROJECT_DIR/luatex-cn-v${VERSION}.zip"
 EXAMPLE_DIR="$PROJECT_DIR/示例"
 TEST_EXAMPLE_DIR="$PROJECT_DIR/test_example"
 WORK_DIR="$TEST_EXAMPLE_DIR/ctan"
