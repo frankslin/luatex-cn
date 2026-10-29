@@ -2,6 +2,11 @@
 
 本项目的所有重大更改都将记录在此文件中。
 
+## [未发布]
+
+修复：
+- `ltc-guji` 古籍模板（默认／红楼梦／欧氏族谱）补上 `margin-inner`／`margin-outer` 默认值（与 `margin-left`／`margin-right` 相同）。0.4.3 起 `twoside = true` 只读 inner/outer（#174），而古籍模板原来只设 left/right，用户文档一写 `twoside = true` 左右边距就变成 0，正文顶到纸边、右侧列出页。另外，`\pageSetup` 切换 `twoside` 时若当前生效的边距组仍为 0，现在会发出警告，之前只在同一次调用改了被忽略的那组键时才报
+
 ## [0.4.3] - 2026-10-28
 
 新增：
