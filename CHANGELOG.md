@@ -6,6 +6,7 @@
 
 新增：
 - `\夹注[n-char-per-col=20]`（`每行字数`）— 夹注每小列字数可与正文不同，如正文每列 15 字、夹注每小列 20 字；夹注格高取「正文列高 ÷ N」，字号用 `font-size` 另配，`grid-height` 同时给出时以其为准，夹注内 `\样式[grid-height]` 仍可覆盖。`\夹注设置{n-char-per-col=20}` 作全书默认。此前只能手算 `grid-height` (#82)
+- 对页补页：`\pageSetup{对页补页=true}`（`facing-pages`）— 对页（双页对开）装订时，章末落在奇数页就自动补一页空白页，使下一章落在奇数页（右页）起；章末在偶数页不补，章在页中间起也不动。默认关闭，不改变现有书的页数；按实体页序计，跨多个 `正文` 块也准。`\补空白页`（`\InsertBlankPage`）可在任意处强制补一页（块内、块间都行，连写两次补两页）。补出来的页默认带版框、版心／页眉页码，`补页样式=空白`（`blank-page-style=blank`，`\pageSetup` 与 `\补空白页[补页样式=空白]` 均可写）则整页完全空白。暂只做奇数页起章，不含偶数页起章；筒子页模式下不自动补页；只认 `正文` 块内的 `\chapter`。详见 `docs/BLANK_PAGES.md` (#176)
 - 现代竖排文档类（`ltc-cn-vbook`／`ltc-tw-vbook`）页码位置可选：`\pageSetup{ page-number-position = inner | outer | center }`（中文键 `页码位置 = 内侧 | 外侧 | 居中`），默认仍在装订侧；页眉位置不变（古籍类版心页码早有 `page-number={align=center}`，见 #193）
 
 修复：
