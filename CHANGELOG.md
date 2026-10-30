@@ -5,6 +5,7 @@
 ## [未发布]
 
 新增：
+- `\夹注[n-char-per-col=20]`（`每行字数`）— 夹注每小列字数可与正文不同，如正文每列 15 字、夹注每小列 20 字；夹注格高取「正文列高 ÷ N」，字号用 `font-size` 另配，`grid-height` 同时给出时以其为准，夹注内 `\样式[grid-height]` 仍可覆盖。`\夹注设置{n-char-per-col=20}` 作全书默认。此前只能手算 `grid-height` (#82)
 - 现代竖排文档类（`ltc-cn-vbook`／`ltc-tw-vbook`）页码位置可选：`\pageSetup{ page-number-position = inner | outer | center }`（中文键 `页码位置 = 内侧 | 外侧 | 居中`），默认仍在装订侧；页眉位置不变（古籍类版心页码早有 `page-number={align=center}`，见 #193）
 
 修复：

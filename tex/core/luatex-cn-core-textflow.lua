@@ -48,8 +48,10 @@ local textflow = {}
 -- @param textflow_align (string|nil) TextFlow alignment (outward, inward, center, left, right)
 -- @param auto_balance (boolean|nil) Whether to auto-balance last column (default true)
 -- @param grid_height_sp (number|nil) Grid height in sp for capacity calculation
+-- @param style_extra (table|nil) Extra style fields
+-- @param n_char (number|nil) Chars per sub-column; grid height is derived from the column height at layout time
 -- @return (number) Style ID
-function textflow.push_style(font_color, font_size, font, textflow_align, auto_balance, grid_height_sp, style_extra)
+function textflow.push_style(font_color, font_size, font, textflow_align, auto_balance, grid_height_sp, style_extra, n_char)
     -- Start with style_extra (from \样式 forwarded keys), then overlay textflow-specific fields
     local extra = style_extra or {}
     if textflow_align and textflow_align ~= "" then
@@ -60,6 +62,15 @@ function textflow.push_style(font_color, font_size, font, textflow_align, auto_b
     if gh_val then
         extra.grid_height = gh_val
         extra.textflow_grid_height = gh_val  -- mark as textflow-level (not inner \Style)
+    end
+    local n = n_char and tonumber(n_char) or 0
+    if not gh_val and n > 0 then
+        -- Resolved to a grid height at layout time (issue #82). grid_height is
+        -- set to false (not nil) so that a grid-height inherited from an outer
+        -- \样式 does not leak in: an explicit value is only expected from an
+        -- inner \样式[grid-height=...] inside the note.
+        extra.textflow_n_char = n
+        extra.grid_height = false
     end
     return style_registry.push_content_style(font_color, font_size, font, extra)
 end
@@ -514,8 +525,33 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
     -- which may come from inner \样式[grid-height=Y]
     local textflow_gh = nil
     local first_sid = D.get_attribute(nodes[1], constants.ATTR_STYLE_REG_ID)
+    -- n-char-per-col (issue #82): grid height = column height / N. The column
+    -- height is only known here, so the style carries textflow_n_char and the
+    -- value is derived per segment (bands may differ in height). Nothing is
+    -- written back into the registry: styles are shared between segments, and
+    -- an inner \样式[grid-height=Y] inside the note must keep its own value.
+    local n_char_gh = nil
     if first_sid and first_sid > 0 then
         textflow_gh = style_registry.get_textflow_grid_height(first_sid)
+        local n_char = (not textflow_gh) and style_registry.get_attr(first_sid, "textflow_n_char")
+        if n_char and n_char > 0 then
+            if ctx.col_height_sp and ctx.col_height_sp > 0 then
+                n_char_gh = math.floor(ctx.col_height_sp / n_char)
+                textflow_gh = n_char_gh
+            else
+                texio.write_nl("term and log", "luatex-cn Warning: n-char-per-col ignored: "
+                    .. "column height is unknown in this context")
+            end
+        end
+    end
+    -- Per-node grid height: an explicit style value (inner \样式[grid-height])
+    -- wins; other nodes of an n-char note get the derived height.
+    local function node_style_gh(sid)
+        local sgh = style_registry.get_grid_height(sid)
+        if not sgh and n_char_gh and style_registry.get_attr(sid, "textflow_n_char") then
+            return n_char_gh
+        end
+        return sgh or nil
     end
 
     local available_in_first = params.effective_limit - ctx.cur_row
@@ -571,7 +607,7 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
         else
             local sid = D.get_attribute(n, constants.ATTR_STYLE_REG_ID)
             if sid and sid > 0 then
-                local sgh = style_registry.get_grid_height(sid)
+                local sgh = node_style_gh(sid)
                 -- sgh == 0 is a valid override: zero-advance overlay glyph
                 -- (e.g. the compressed closing bracket of a jiao note that
                 -- shares its cell with the following character)
@@ -692,7 +728,7 @@ local function place_textflow_segment(ctx, nodes, layout_map, params, callbacks,
                 node_cell_h = gh  -- default: global grid_height
                 local sid = D.get_attribute(node_info.node, constants.ATTR_STYLE_REG_ID)
                 if sid and sid > 0 then
-                    local style_ch = style_registry.get_grid_height(sid)
+                    local style_ch = node_style_gh(sid)
                     if style_ch and style_ch >= 0 then
                         node_cell_h = style_ch
                     end
